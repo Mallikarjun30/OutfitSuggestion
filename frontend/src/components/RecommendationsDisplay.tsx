@@ -1,7 +1,7 @@
 import { Sparkles, Sun, Cloud, CloudRain, Snowflake, ShirtIcon } from 'lucide-react';
 
 interface Recommendation {
-  id: string;
+  id?: string;
   suggestion_text: string;
   reason: string;
   image_url?: string;
@@ -81,7 +81,7 @@ const RecommendationsDisplay = ({ recommendations, weather }: RecommendationsDis
       <div className="space-y-4">
         {recommendations.map((rec, index) => (
           <div
-            key={rec.id}
+            key={rec.id || `rec-${index}`}
             className="recommendation-card"
             style={{
               animationDelay: `${index * 0.1}s`

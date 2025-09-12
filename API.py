@@ -149,8 +149,9 @@ def upload_outfit_and_suggest():
         single = request.files.get("file")
         if single:
             files = [single]
-    if not files:
-        return jsonify({"error": "No outfit files uploaded"}), 400
+    
+    # Filter out empty files
+    files = [f for f in files if f and f.filename and f.filename != '']
 
     # Create temporary folder for outfit analysis (separate from wardrobe)
     OUTFIT_TEMP_FOLDER = os.path.join("uploads", "outfit_temp")
@@ -161,24 +162,26 @@ def upload_outfit_and_suggest():
     temp_files_to_cleanup = []
     
     try:
-        for idx, file in enumerate(files):
-            if not (file and allowed_file(file.filename)):
-                continue
-            
-            # Generate unique filename to avoid collisions
-            ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "jpg"
-            unique_filename = f"outfit_{uuid.uuid4().hex[:8]}.{ext}"
-            filepath = os.path.join(OUTFIT_TEMP_FOLDER, unique_filename)
-            
-            file.save(filepath)
-            temp_files_to_cleanup.append(filepath)
-            
-            raw, _ = analyzer.analyze(filepath)
-            outfit_descriptions.append({
-                "filename": unique_filename,
-                "description": raw,
-                "image_index": idx + 1
-            })
+        # Only analyze files if they were uploaded
+        if files:
+            for idx, file in enumerate(files):
+                if not (file and allowed_file(file.filename)):
+                    continue
+                
+                # Generate unique filename to avoid collisions
+                ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "jpg"
+                unique_filename = f"outfit_{uuid.uuid4().hex[:8]}.{ext}"
+                filepath = os.path.join(OUTFIT_TEMP_FOLDER, unique_filename)
+                
+                file.save(filepath)
+                temp_files_to_cleanup.append(filepath)
+                
+                raw, _ = analyzer.analyze(filepath)
+                outfit_descriptions.append({
+                    "filename": unique_filename,
+                    "description": raw,
+                    "image_index": idx + 1
+                })
 
         # --- Handle date / season ---
         if date_str:
@@ -216,6 +219,10 @@ def upload_outfit_and_suggest():
         outfit_digest_lines = [
             f"Image {od['image_index']}: {od['description']}" for od in outfit_descriptions
         ]
+        
+        # Handle case with no uploaded files - provide general suggestions
+        if not outfit_descriptions:
+            outfit_digest_lines = ["No specific outfit uploaded. Provide general style suggestions based on weather and current wardrobe."]
 
         # --- Build prompt with multiple outfit images clearly labeled ---
         prompt = (
@@ -252,8 +259,19 @@ def upload_outfit_and_suggest():
         # --- Get AI suggestions ---
         suggestion_text = analyzer.suggest(prompt)
         try:
-            suggestion_json = json.loads(suggestion_text)
-        except Exception:
+            # Handle markdown code blocks and clean the JSON
+            clean_text = suggestion_text.strip()
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]  # Remove ```json
+            if clean_text.startswith("```"):
+                clean_text = clean_text[3:]   # Remove ```
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]  # Remove ```
+            clean_text = clean_text.strip()
+            
+            suggestion_json = json.loads(clean_text)
+        except Exception as e:
+            print(f"JSON parsing failed: {e}")
             suggestion_json = {"recommendations": [], "notes": suggestion_text}
 
         out_recs = []
