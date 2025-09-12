@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       clientPort: 5000,
     },
+    allowedHosts: true,
   },
   preview: {
     host: "0.0.0.0",
