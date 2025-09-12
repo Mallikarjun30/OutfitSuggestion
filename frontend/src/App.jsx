@@ -3,6 +3,7 @@ import FileUpload from './components/FileUpload';
 import WardrobeGallery from './components/WardrobeGallery';
 import OutfitSuggestions from './components/OutfitSuggestions';
 import LocationDetector from './components/LocationDetector';
+import Toast from './components/Toast';
 import ApiService from './services/apiService';
 import './App.css';
 
@@ -17,6 +18,7 @@ function App() {
     suggestions: false,
   });
   const [activeTab, setActiveTab] = useState('wardrobe');
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     loadWardrobe();
@@ -90,8 +92,7 @@ function App() {
   };
 
   const showToast = (message, type = 'info') => {
-    // Simple toast implementation - you could use a toast library here
-    console.log(`${type.toUpperCase()}: ${message}`);
+    setToast({ message, type });
   };
 
   return (
@@ -246,6 +247,13 @@ function App() {
           </div>
         )}
       </main>
+      
+      {/* Toast Notification */}
+      <Toast
+        message={toast?.message}
+        type={toast?.type}
+        onClose={() => setToast(null)}
+      />
     </div>
   );
 }

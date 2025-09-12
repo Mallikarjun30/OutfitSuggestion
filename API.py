@@ -2,6 +2,7 @@
 import os
 import json
 import time
+import uuid
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -146,60 +147,73 @@ def upload_outfit_and_suggest():
     if not files:
         return jsonify({"error": "No outfit files uploaded"}), 400
 
+    # Create temporary folder for outfit analysis (separate from wardrobe)
+    OUTFIT_TEMP_FOLDER = os.path.join("uploads", "outfit_temp")
+    os.makedirs(OUTFIT_TEMP_FOLDER, exist_ok=True)
+
     # --- Analyze each uploaded outfit image ---
     outfit_descriptions: List[Dict[str, Any]] = []
-    for idx, file in enumerate(files):
-        if not (file and allowed_file(file.filename)):
-            continue
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(WARDROBE_FOLDER, filename)
-        file.save(filepath)
-        raw, _ = analyzer.analyze(filepath)
-        outfit_descriptions.append({
-            "filename": filename,
-            "description": raw,
-            "image_index": idx + 1
-        })
+    temp_files_to_cleanup = []
+    
+    try:
+        for idx, file in enumerate(files):
+            if not (file and allowed_file(file.filename)):
+                continue
+            
+            # Generate unique filename to avoid collisions
+            ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "jpg"
+            unique_filename = f"outfit_{uuid.uuid4().hex[:8]}.{ext}"
+            filepath = os.path.join(OUTFIT_TEMP_FOLDER, unique_filename)
+            
+            file.save(filepath)
+            temp_files_to_cleanup.append(filepath)
+            
+            raw, _ = analyzer.analyze(filepath)
+            outfit_descriptions.append({
+                "filename": unique_filename,
+                "description": raw,
+                "image_index": idx + 1
+            })
 
-    # --- Handle date / season ---
-    if date_str:
-        try:
-            when = datetime.fromisoformat(date_str)
-        except Exception:
+        # --- Handle date / season ---
+        if date_str:
+            try:
+                when = datetime.fromisoformat(date_str)
+            except Exception:
+                when = datetime.utcnow()
+        else:
             when = datetime.utcnow()
-    else:
-        when = datetime.utcnow()
 
-    season = infer_season(when, hemisphere=hemisphere)
+        season = infer_season(when, hemisphere=hemisphere)
 
-    # --- Get weather data (city OR lat/lon) ---
-    weather_json = None
-    if city:
-        weather_json = weather_client.current_by_city(city=city, units=units)
-    elif lat and lon:
-        try:
-            weather_json = weather_client.current_by_coords(lat=float(lat), lon=float(lon), units=units)
-        except Exception:
-            weather_json = None
+        # --- Get weather data (city OR lat/lon) ---
+        weather_json = None
+        if city:
+            weather_json = weather_client.current_by_city(city=city, units=units)
+        elif lat and lon:
+            try:
+                weather_json = weather_client.current_by_coords(lat=float(lat), lon=float(lon), units=units)
+            except Exception:
+                weather_json = None
 
-    weather_summary = "unknown"
-    if weather_json:
-        main = weather_json.get("weather", [{}])[0].get("main")
-        desc = weather_json.get("weather", [{}])[0].get("description")
-        temp = weather_json.get("main", {}).get("temp")
-        weather_summary = f"{main} ({desc}), temp={temp} {('°C' if units=='metric' else '°F')}"
+        weather_summary = "unknown"
+        if weather_json:
+            main = weather_json.get("weather", [{}])[0].get("main")
+            desc = weather_json.get("weather", [{}])[0].get("description")
+            temp = weather_json.get("main", {}).get("temp")
+            weather_summary = f"{main} ({desc}), temp={temp} {('°C' if units=='metric' else '°F')}"
 
-    # --- Wardrobe summary for prompt ---
-    wardrobe_items = WardrobeItem.query.order_by(WardrobeItem.created_at.desc()).limit(MAX_PROMPT_WARDROBE).all()
-    wardrobe_digest_lines = [f"[{wi.id}] {wi.description}" for wi in wardrobe_items]
+        # --- Wardrobe summary for prompt ---
+        wardrobe_items = WardrobeItem.query.order_by(WardrobeItem.created_at.desc()).limit(MAX_PROMPT_WARDROBE).all()
+        wardrobe_digest_lines = [f"[{wi.id}] {wi.description}" for wi in wardrobe_items]
 
-    # --- Outfit description block ---
-    outfit_digest_lines = [
-        f"Image {od['image_index']}: {od['description']}" for od in outfit_descriptions
-    ]
+        # --- Outfit description block ---
+        outfit_digest_lines = [
+            f"Image {od['image_index']}: {od['description']}" for od in outfit_descriptions
+        ]
 
-    # --- Build prompt with multiple outfit images clearly labeled ---
-    prompt = (
+        # --- Build prompt with multiple outfit images clearly labeled ---
+        prompt = (
         "You are a personal stylist. I have a wardrobe (each item shows its SERIAL ID in brackets) "
         "and I'm wearing the following outfit today. Multiple images may be provided for different angles. "
         "Consider ALL outfit images together as one complete outfit. "
@@ -213,34 +227,43 @@ def upload_outfit_and_suggest():
         + "\n".join(wardrobe_digest_lines) + "\n\n"
         "TODAY'S OUTFIT (multiple images):\n"
         + "\n".join(outfit_digest_lines)
-    )
+        )
 
-    # --- Get AI suggestions ---
-    suggestion_text = analyzer.suggest(prompt)
-    try:
-        suggestion_json = json.loads(suggestion_text)
-    except Exception:
-        suggestion_json = {"recommendations": [], "notes": suggestion_text}
+        # --- Get AI suggestions ---
+        suggestion_text = analyzer.suggest(prompt)
+        try:
+            suggestion_json = json.loads(suggestion_text)
+        except Exception:
+            suggestion_json = {"recommendations": [], "notes": suggestion_text}
 
-    out_recs = []
-    for rec in suggestion_json.get("recommendations", []):
-        wid = rec.get("wardrobe_id")
-        reason = rec.get("reason")
-        fallback = rec.get("fallback_text")
-        resolved = {"wardrobe_id": wid, "reason": reason, "fallback_text": fallback}
-        if wid is not None:
-            item = WardrobeItem.query.get(wid)
-            resolved["item"] = wardrobe_item_to_dict(item) if item else None
-        out_recs.append(resolved)
+        out_recs = []
+        for rec in suggestion_json.get("recommendations", []):
+            wid = rec.get("wardrobe_id")
+            reason = rec.get("reason")
+            fallback = rec.get("fallback_text")
+            resolved = {"wardrobe_id": wid, "reason": reason, "fallback_text": fallback}
+            if wid is not None:
+                item = WardrobeItem.query.get(wid)
+                resolved["item"] = wardrobe_item_to_dict(item) if item else None
+            out_recs.append(resolved)
 
-    return jsonify({
-        "outfit_descriptions": outfit_descriptions,
-        "season": season,
-        "weather": weather_json,
-        "suggestions_raw": suggestion_text,
-        "suggestions": out_recs,
-        "notes": suggestion_json.get("notes")
-    })
+        return jsonify({
+            "outfit_descriptions": outfit_descriptions,
+            "season": season,
+            "weather": weather_json,
+            "suggestions_raw": suggestion_text,
+            "suggestions": out_recs,
+            "notes": suggestion_json.get("notes")
+        })
+
+    finally:
+        # Cleanup temporary outfit files after analysis
+        for temp_file in temp_files_to_cleanup:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except Exception as e:
+                print(f"Warning: Could not cleanup temp file {temp_file}: {e}")
 
 
 # --- Health Check
