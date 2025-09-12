@@ -1,22 +1,8 @@
 // API client for connecting to the Flask backend
 
-// Get API base URL - use environment variable, or construct from current location
+// Get API base URL - use environment variable or relative paths (same-origin)
 const getApiBaseUrl = () => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  
-  // Construct URL based on current location
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  
-  // If we're on localhost, use localhost:8080
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:8080';
-  }
-  
-  // Otherwise, use the same protocol and hostname with port 8080
-  return `${protocol}//${hostname}:8080`;
+  return import.meta.env.VITE_API_URL || '';
 };
 
 const API_BASE_URL = getApiBaseUrl();

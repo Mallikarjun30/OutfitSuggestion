@@ -17,7 +17,12 @@ from flask_cors import CORS
 
 # --- App Setup
 app = Flask(__name__)
-CORS(app)  # Allow all origins
+# Configure CORS - allow localhost in development, restrict in production
+if os.getenv('FLASK_ENV') == 'development' or app.debug:
+    CORS(app, origins=['http://localhost:5000', 'http://127.0.0.1:5000'])  # Restrict to frontend dev server
+else:
+    # In production, no CORS needed since frontend is served from same origin
+    pass
 
 # --- Config
 WARDROBE_FOLDER = os.path.join("uploads", "wardrobe")
@@ -52,7 +57,7 @@ def wardrobe_item_to_dict(item: WardrobeItem) -> Dict[str, Any]:
     return {
         "id": item.id,
         "filename": item.filename,
-        "file_url": url_for("serve_wardrobe_image", item_id=item.id, _external=True),
+        "file_url": url_for("serve_wardrobe_image", item_id=item.id, _external=False),
         "description": item.description,
         "created_at": item.created_at
     }
@@ -290,5 +295,7 @@ def serve_frontend(path):
         return jsonify({"status": "ok", "time": datetime.utcnow().isoformat(), "mode": "development"})
 
 if __name__ == "__main__":
-    # Backend runs on port 8080, frontend will run on port 5000
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    # Use platform port or 5000 for production, 8080 for development
+    port = int(os.getenv('PORT', '8080' if os.getenv('FLASK_ENV') == 'development' else '5000'))
+    debug_mode = os.getenv('FLASK_ENV') == 'development' or os.getenv('FLASK_DEBUG') == '1'
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)

@@ -13,6 +13,20 @@ export default defineConfig(({ mode }) => ({
       clientPort: 5000,
     },
     allowedHosts: true,
+    proxy: {
+      '/wardrobe': { 
+        target: 'http://127.0.0.1:8080', 
+        changeOrigin: true 
+      },
+      '/outfit': { 
+        target: 'http://127.0.0.1:8080', 
+        changeOrigin: true 
+      },
+      '/api': { 
+        target: 'http://127.0.0.1:8080', 
+        changeOrigin: true 
+      },
+    },
   },
   preview: {
     host: "0.0.0.0",
@@ -20,6 +34,10 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  build: {
+    outDir: "../static",
+    emptyOutDir: true,
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
