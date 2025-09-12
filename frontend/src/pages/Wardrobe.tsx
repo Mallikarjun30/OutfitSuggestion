@@ -227,7 +227,9 @@ const Wardrobe = () => {
                 <div className="text-sm text-muted-foreground">Total Items</div>
               </div>
               <div className="fashion-card text-center">
-                <div className="text-3xl font-bold text-accent-emerald mb-1">0</div>
+                <div className="text-3xl font-bold text-accent-emerald mb-1">
+                  {new Set(wardrobeItems.map(item => item.category)).size}
+                </div>
                 <div className="text-sm text-muted-foreground">Categories</div>
               </div>
               <div className="fashion-card text-center">

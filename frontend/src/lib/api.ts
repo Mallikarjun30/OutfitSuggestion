@@ -20,6 +20,7 @@ interface FrontendWardrobeItem {
   name: string;
   image_url?: string;
   fallback_text?: string;
+  category: string;
 }
 
 interface OutfitSuggestion {
@@ -72,12 +73,40 @@ const extractItemName = (description: string): string => {
   return "Clothing Item";
 };
 
+// Helper function to extract category from the AI description
+const extractItemCategory = (description: string): string => {
+  if (!description) return "Other";
+  
+  const lowerDesc = description.toLowerCase();
+  
+  // Define category mappings
+  const categoryMappings = {
+    'Tops': ['shirt', 't-shirt', 'blouse', 'top', 'tank', 'crop', 'cardigan', 'sweater', 'hoodie', 'jacket', 'blazer', 'coat'],
+    'Bottoms': ['jeans', 'pants', 'trousers', 'shorts', 'skirt', 'dress', 'leggings', 'joggers'],
+    'Outerwear': ['jacket', 'coat', 'blazer', 'cardigan', 'vest', 'outerwear'],
+    'Accessories': ['hat', 'cap', 'beanie', 'scarf', 'belt', 'bag', 'watch', 'jewelry', 'sunglasses'],
+    'Footwear': ['shoes', 'boots', 'sneakers', 'sandals', 'heels', 'flats']
+  };
+  
+  // Check each category
+  for (const [category, terms] of Object.entries(categoryMappings)) {
+    for (const term of terms) {
+      if (lowerDesc.includes(term)) {
+        return category;
+      }
+    }
+  }
+  
+  return "Other";
+};
+
 // Helper function to map backend wardrobe item to frontend format
 const mapWardrobeItem = (item: BackendWardrobeItem): FrontendWardrobeItem => ({
   id: item.id.toString(),
   name: extractItemName(item.description || ''),
   image_url: item.file_url,
-  fallback_text: item.description || `${item.filename} - Wardrobe item`
+  fallback_text: item.description || `${item.filename} - Wardrobe item`,
+  category: extractItemCategory(item.description || '')
 });
 
 // API Client class
@@ -194,9 +223,9 @@ class ApiClient {
     const data: SuggestionsResponse = await response.json();
     
     // Map backend response to frontend format
-    const recommendations = data.suggestions.map(suggestion => ({
-      id: suggestion.item?.id.toString(),
-      suggestion_text: suggestion.item?.description || suggestion.fallback_text || 'AI-generated suggestion',
+    const recommendations = data.suggestions.map((suggestion, index) => ({
+      id: suggestion.wardrobe_id?.toString() || `suggestion-${index}`,
+      suggestion_text: extractItemName(suggestion.item?.description || '') || suggestion.fallback_text || 'AI-generated suggestion',
       reason: suggestion.reason,
       image_url: suggestion.item?.file_url,
       fallback_text: suggestion.fallback_text
