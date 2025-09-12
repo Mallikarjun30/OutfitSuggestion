@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Wardrobe Stylist</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .preview-img { max-height: 120px; border-radius: 12px; object-fit: cover; }
+    .card { border-radius: 1rem; background: white; box-shadow: 0 4px 16px rgba(0,0,0,0.05); padding: 1.5rem; }
+    .spinner {
+      border: 4px solid #e5e7eb;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      animation: spin 1s linear infinite;
+      margin: auto;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1e293b;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s ease;
+      z-index: 50;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-900">
+  <!-- Header -->
+  <header class="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-10">
+    <h1 class="text-2xl font-bold text-blue-600">AI Wardrobe Stylist</h1>
+    <button id="detect-location" class="text-sm bg-blue-50 px-3 py-1.5 rounded hover:bg-blue-100 transition">📍 Detect Location</button>
+  </header>
+
+  <main class="max-w-5xl mx-auto p-6 space-y-8">
+    
+    <!-- Wardrobe Upload -->
+    <section class="card">
+      <h2 class="text-xl font-semibold mb-4">👕 Upload Wardrobe Items</h2>
+      <input type="file" id="wardrobe-files" multiple accept="image/*" class="mb-4 block" />
+      <button id="upload-wardrobe" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Upload</button>
+      <div id="wardrobe-preview" class="flex flex-wrap gap-4 mt-4"></div>
+    </section>
+
+    <!-- Wardrobe Gallery -->
+    <section class="card">
+      <h2 class="text-xl font-semibold mb-4">🧥 Your Wardrobe</h2>
+      <div id="wardrobe-loader" class="hidden"><div class="spinner"></div></div>
+      <div id="wardrobe-list" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+    </section>
+
+    <!-- Outfit Suggestion -->
+    <section class="card">
+      <h2 class="text-xl font-semibold mb-4">✨ Get Outfit Suggestions</h2>
+      <input type="file" id="outfit-files" multiple accept="image/*" class="mb-2 block" />
+      <input type="text" id="city" placeholder="City (optional)" class="border p-2 rounded w-full mb-2" />
+      <button id="upload-outfit" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">Get Suggestions</button>
+      <div id="outfit-preview" class="flex flex-wrap gap-4 mt-4"></div>
+      <div id="suggestion-loader" class="hidden mt-4"><div class="spinner"></div></div>
+    </section>
+
+    <!-- Suggestions Display -->
+    <section class="card">
+      <h2 class="text-xl font-semibold mb-4">🪄 Recommendations</h2>
+      <div id="suggestions" class="space-y-4 text-sm"></div>
+    </section>
+
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:5000";
+    let userLocation = { lat: null, lon: null };
+
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      toast.innerText = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    function toggleLoader(id, show) {
+      document.getElementById(id).classList.toggle("hidden", !show);
+    }
+
+    function previewFiles(input, containerId) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = "";
+      Array.from(input.files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = document.createElement("img");
+          img.src = e.target.result;
+          img.className = "preview-img";
+          container.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    document.getElementById("wardrobe-files").addEventListener("change", e => previewFiles(e.target, "wardrobe-preview"));
+    document.getElementById("outfit-files").addEventListener("change", e => previewFiles(e.target, "outfit-preview"));
+
+    // Wardrobe Upload
+    document.getElementById("upload-wardrobe").addEventListener("click", async () => {
+      const files = document.getElementById("wardrobe-files").files;
+      if (!files.length) return showToast("Select wardrobe images first");
+      const formData = new FormData();
+      Array.from(files).forEach(f => formData.append("files", f));
+      toggleLoader("wardrobe-loader", true);
+      await axios.post(`${API_BASE}/wardrobe`, formData);
+      await loadWardrobe();
+      toggleLoader("wardrobe-loader", false);
+      showToast("Wardrobe updated ✅");
+    });
+
+    async function loadWardrobe() {
+      toggleLoader("wardrobe-loader", true);
+      const res = await axios.get(`${API_BASE}/wardrobe`);
+      const data = res.data;
+      const list = document.getElementById("wardrobe-list");
+      list.innerHTML = "";
+      data.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "flex flex-col items-center text-center p-2 bg-gray-50 rounded-xl shadow hover:shadow-md transition";
+        div.innerHTML = `
+          <img src="${item.file_url}" class="preview-img mb-2" />
+          <p class="text-xs mb-2 line-clamp-2">${item.description}</p>
+          <button data-id="${item.id}" class="delete-btn bg-red-500 text-white px-2 py-1 text-xs rounded hover:bg-red-600 transition">Delete</button>
+        `;
+        list.appendChild(div);
+      });
+
+      document.querySelectorAll(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-id");
+          if (confirm("Delete this item?")) {
+            await axios.delete(`${API_BASE}/wardrobe/${id}`);
+            loadWardrobe();
+            showToast("Item deleted 🗑️");
+          }
+        });
+      });
+
+      toggleLoader("wardrobe-loader", false);
+    }
+    loadWardrobe();
+
+    // Outfit Suggestion
+    document.getElementById("upload-outfit").addEventListener("click", async () => {
+      const files = document.getElementById("outfit-files").files;
+      if (!files.length) return showToast("Select outfit images first");
+      const city = document.getElementById("city").value;
+      const formData = new FormData();
+      Array.from(files).forEach(f => formData.append("files", f));
+      if (city) formData.append("city", city);
+      if (userLocation.lat) {
+        formData.append("lat", userLocation.lat);
+        formData.append("lon", userLocation.lon);
+      }
+      toggleLoader("suggestion-loader", true);
+      const res = await axios.post(`${API_BASE}/outfit`, formData);
+      toggleLoader("suggestion-loader", false);
+      displaySuggestions(res.data);
+    });
+
+    function displaySuggestions(data) {
+      const container = document.getElementById("suggestions");
+      container.innerHTML = `
+        <p><strong>Season:</strong> ${data.season}</p>
+        <p><strong>Weather:</strong> ${data.weather?.weather?.[0]?.description || "N/A"}</p>
+        <p><strong>Notes:</strong> ${data.notes || "No notes"}</p>
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${data.suggestions.map(s => `
+            <div class="border rounded-lg p-3 bg-gray-50 hover:bg-gray-100 transition">
+              ${s.item ? `<img src="${s.item.file_url}" class="preview-img mb-2" />` : `<p class="italic text-sm">${s.fallback_text}</p>`}
+              <p class="text-sm"><strong>Reason:</strong> ${s.reason}</p>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // Location Detection
+    document.getElementById("detect-location").addEventListener("click", () => {
+      if (!navigator.geolocation) return showToast("Geolocation not supported ❌");
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          userLocation.lat = pos.coords.latitude;
+          userLocation.lon = pos.coords.longitude;
+          showToast("Location detected ✅");
+        },
+        err => showToast("Location access denied ❌")
+      );
+    });
+  </script>
+</body>
+</html>
