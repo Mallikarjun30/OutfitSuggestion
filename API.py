@@ -226,35 +226,56 @@ def upload_outfit_and_suggest():
 
         # --- Build prompt with multiple outfit images clearly labeled ---
         prompt = (
-        "You are a personal stylist AI. Analyze the wardrobe and current outfit to provide styling recommendations. "
-        "Return ONLY a properly formatted JSON response with this exact structure:\n"
-        "{\n"
-        '  "recommendations": [\n'
-        '    {\n'
-        '      "wardrobe_id": 123,\n'
-        '      "reason": "Clear reason why this item complements the outfit",\n'
-        '      "fallback_text": null\n'
-        '    },\n'
-        '    {\n'
-        '      "wardrobe_id": null,\n'
-        '      "reason": "Reason for this suggestion",\n'
-        '      "fallback_text": "Specific item suggestion if not in wardrobe"\n'
-        '    }\n'
-        '  ],\n'
-        '  "notes": "Brief overall styling advice",\n'
-        '  "weather_considerations": "How weather affects the recommendations"\n'
-        "}\n\n"
-        "CONTEXT:\n"
-        f"Date: {when.date().isoformat()}\n"
-        f"Season: {season}\n"
-        f"Weather: {weather_summary}\n\n"
-        "AVAILABLE WARDROBE ITEMS (use the ID numbers):\n"
-        + "\n".join(wardrobe_digest_lines) + "\n\n"
-        "CURRENT OUTFIT TO STYLE:\n"
-        + "\n".join(outfit_digest_lines) + "\n\n"
-        "Provide 1-3 recommendations. Use wardrobe_id for existing items, or set to null and use fallback_text for missing items. "
-        "Return ONLY the JSON object with no additional formatting or text."
+            "You are a professional AI personal stylist and fashion consultant. "
+            "Analyze the wardrobe and current outfit to provide styling recommendations that are practical, fashionable, and cohesive. "
+            "Your goal is to always suggest a COMPLETE OUTFIT from head to toe, including:\n"
+            "- Top (shirt, t-shirt, blouse, kurta, kurti, sherwani, etc.) — pick according to style, season, and occasion.\n"
+            "- Bottom (pants, jeans, trousers, skirts, palazzos, churidar, dhoti pants, salwar, lungi, etc.) — suggest what best fits the look.\n"
+            "- One-piece options (dress, saree, lehenga, anarkali, jumpsuit, etc.) if suitable for the event.\n"
+            "- Footwear (shoes, sneakers, boots, heels, sandals, juttis, kolhapuris, mojaris, etc.) — match the vibe of the outfit.\n"
+            "- Outerwear (jacket, coat, shrug, dupatta, stole, shawl — use when appropriate for season/weather).\n"
+            "- Accessories (watch, belt, hat, sunglasses, jewelry, bangles, bindi, kada, earrings, bags, clutches — keep tasteful and minimal).\n"
+            "- Optional Layering (scarf, cardigan, overshirt, ethnic vest/nehru jacket — only when weather or style calls for it).\n\n"
+            "STRICT INSTRUCTIONS:\n"
+            "- Return ONLY a properly formatted JSON response with this exact structure:\n"
+            "{\n"
+            '  \"recommendations\": [\n'
+            '    {\n'
+            '      \"wardrobe_id\": 123,\n'
+            '      \"reason\": \"Clear reason why this item complements the outfit\",\n'
+            '      \"fallback_text\": null\n'
+            '    },\n'
+            '    {\n'
+            '      \"wardrobe_id\": null,\n'
+            '      \"reason\": \"Reason for this suggestion\",\n'
+            '      \"fallback_text\": \"Specific item suggestion if not in wardrobe\"\n'
+            '    }\n'
+            '  ],\n'
+            '  \"notes\": \"Brief overall styling advice (color matching, fit, occasion suitability)\",\n'
+            '  \"weather_considerations\": \"How weather affects the recommendations (e.g., layering, breathable fabrics, waterproof shoes)\"\n'
+            "}\n\n"
+            "CONTEXT:\n"
+            f"Date: {when.date().isoformat()}\n"
+            f"Season: {season}\n"
+            f"Weather: {weather_summary}\n\n"
+            "AVAILABLE WARDROBE ITEMS (use the ID numbers):\n"
+            + "\n".join(wardrobe_digest_lines) + "\n\n"
+            "CURRENT OUTFIT TO STYLE:\n"
+            + "\n".join(outfit_digest_lines) + "\n\n"
+            "GUIDELINES:\n"
+            "- Prioritize using the current outfit over everything else. Suggest alternatives only if the current outfit is inappropriate for the occasion, season, or does not match well with other items.\n"
+            "- Prioritize using available wardrobe items (use wardrobe_id) to complete the outfit.\n"
+            "- Suggest buying new items (wardrobe_id=null + fallback_text) ONLY if that category is missing.\n"
+            "- Avoid recommending duplicate items of the same type if one is already in the outfit.\n"
+            "- Ensure outfit is appropriate for season, occasion, cultural setting, and weather.\n"
+            "- Mix colors, fabrics, and styles tastefully (avoid clashing colors unless intentional).\n"
+            "- For Indian outfits, match dupattas/shawls with the set, coordinate jewelry (simple for casual, heavier for festive events).\n"
+            "- Accessories should enhance the look but not overpower it.\n"
+            "- Keep suggestions inclusive, gender-neutral, and adaptable to any style preference.\n\n"
+            "Return ONLY the JSON object with no additional formatting or text."
         )
+
+
 
         # --- Get AI suggestions ---
         suggestion_text = analyzer.suggest(prompt)
