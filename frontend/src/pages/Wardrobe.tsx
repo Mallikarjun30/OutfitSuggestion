@@ -4,20 +4,39 @@ import WardrobeUpload from '@/components/WardrobeUpload';
 import WardrobeGallery from '@/components/WardrobeGallery';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, Shirt, Plus } from 'lucide-react';
-
-interface WardrobeItem {
-  id: string;
-  name: string;
-  image_url?: string;
-  fallback_text?: string;
-}
+import { apiClient, type FrontendWardrobeItem } from '@/lib/api';
 
 const Wardrobe = () => {
-  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
+  const [wardrobeItems, setWardrobeItems] = useState<FrontendWardrobeItem[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [showUpload, setShowUpload] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Load wardrobe items from backend
+  const loadWardrobeItems = async () => {
+    try {
+      setLoading(true);
+      const items = await apiClient.listWardrobe();
+      setWardrobeItems(items);
+    } catch (error) {
+      console.error('Failed to load wardrobe items:', error);
+      toast({
+        title: "Error loading wardrobe",
+        description: "Failed to load your wardrobe items. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load items on component mount
+  useEffect(() => {
+    loadWardrobeItems();
+  }, []);
 
   // Auto-open upload if coming from link
   useEffect(() => {
@@ -42,29 +61,67 @@ const Wardrobe = () => {
     });
   };
 
-  const handleUploadWardrobe = () => {
-    const newItems: WardrobeItem[] = uploadedFiles.map((file, index) => ({
-      id: `item-${Date.now()}-${index}`,
-      name: file.name.replace(/\.[^/.]+$/, ""),
-      fallback_text: `${file.name.replace(/\.[^/.]+$/, "")} - Uploaded item`,
-    }));
-    
-    setWardrobeItems(prev => [...prev, ...newItems]);
-    setUploadedFiles([]);
-    setShowUpload(false);
-    
-    toast({
-      title: "Upload successful! 🎉",
-      description: `Added ${newItems.length} items to your wardrobe`,
-    });
+  const handleUploadWardrobe = async () => {
+    if (uploadedFiles.length === 0) return;
+
+    try {
+      setUploading(true);
+      const newItems = await apiClient.uploadWardrobe(uploadedFiles);
+      
+      // Refresh the wardrobe list to get the latest items
+      await loadWardrobeItems();
+      
+      setUploadedFiles([]);
+      setShowUpload(false);
+      
+      toast({
+        title: "Upload successful! 🎉",
+        description: `Added ${newItems.length} items to your wardrobe`,
+      });
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload items. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleDeleteItem = (id: string) => {
-    setWardrobeItems(prev => prev.filter(item => item.id !== id));
-    toast({
-      title: "Item removed",
-      description: "Wardrobe item deleted successfully",
-    });
+  const handleDeleteItem = async (id: string) => {
+    try {
+      // Optimistic update
+      const originalItems = wardrobeItems;
+      setWardrobeItems(prev => prev.filter(item => item.id !== id));
+      
+      const success = await apiClient.deleteWardrobe(id);
+      
+      if (success) {
+        toast({
+          title: "Item removed",
+          description: "Wardrobe item deleted successfully",
+        });
+      } else {
+        // Rollback on failure
+        setWardrobeItems(originalItems);
+        toast({
+          title: "Delete failed",
+          description: "Failed to delete item. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Delete failed:', error);
+      // Reload items to ensure consistency
+      await loadWardrobeItems();
+      toast({
+        title: "Delete failed",
+        description: "Failed to delete item. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -124,9 +181,10 @@ const Wardrobe = () => {
                 <div className="mt-6 text-center">
                   <button
                     onClick={handleUploadWardrobe}
-                    className="fashion-button-success inline-flex items-center gap-2"
+                    disabled={uploading}
+                    className="fashion-button-success inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    📁 Upload to Wardrobe ({uploadedFiles.length} files)
+                    {uploading ? '⏳ Uploading...' : `📁 Upload to Wardrobe (${uploadedFiles.length} files)`}
                   </button>
                 </div>
               )}

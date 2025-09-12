@@ -3,72 +3,57 @@ import OutfitSuggestion from '@/components/OutfitSuggestion';
 import RecommendationsDisplay from '@/components/RecommendationsDisplay';
 import { Sparkles, Zap, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { apiClient } from '@/lib/api';
 
 interface Recommendation {
-  id: string;
+  id?: string;
   suggestion_text: string;
   reason: string;
   image_url?: string;
   fallback_text?: string;
 }
 
+interface Weather {
+  season: string;
+  condition: string;
+}
+
 const Suggestions = () => {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [weather, setWeather] = useState<Weather | null>(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const { toast } = useToast();
-
-  // Mock weather data
-  const mockWeather = {
-    season: 'Spring',
-    condition: 'Sunny'
-  };
 
   const handleGetSuggestions = async (files: File[], city?: string) => {
     setIsLoadingSuggestions(true);
     
-    // Mock AI suggestions - in real app would call API
-    setTimeout(() => {
-      const mockSuggestions: Recommendation[] = [
-        {
-          id: 'rec-1',
-          suggestion_text: 'Light Blue Denim Jacket',
-          reason: 'Perfect for spring weather! The light wash complements the sunny conditions and adds a casual-chic vibe to any outfit.',
-          fallback_text: 'Great layering piece for transitional weather'
-        },
-        {
-          id: 'rec-2',
-          suggestion_text: 'White Cotton T-Shirt',
-          reason: 'A classic foundation piece that works with everything. The breathable cotton is ideal for warm spring days.',
-          fallback_text: 'Versatile essential for any wardrobe'
-        },
-        {
-          id: 'rec-3',
-          suggestion_text: 'Comfortable Sneakers',
-          reason: 'Perfect for walking around the city on a sunny day. White or light colors will keep you cool and stylish.',
-          fallback_text: 'Comfortable and weather-appropriate footwear'
-        },
-        {
-          id: 'rec-4',
-          suggestion_text: 'High-Waisted Jeans',
-          reason: 'Flattering silhouette that pairs beautifully with crop tops and fitted shirts. The high waist creates a sleek line.',
-          fallback_text: 'Versatile and flattering bottom choice'
-        },
-        {
-          id: 'rec-5',
-          suggestion_text: 'Statement Sunglasses',
-          reason: 'Essential for sunny spring days and adds an instant style upgrade to any casual outfit.',
-          fallback_text: 'Stylish sun protection accessory'
-        }
-      ];
+    try {
+      const result = await apiClient.suggestOutfits({
+        files: files.length > 0 ? files : undefined,
+        city: city || undefined,
+        hemisphere: 'north', // Default hemisphere
+        units: 'metric'
+      });
       
-      setRecommendations(mockSuggestions);
-      setIsLoadingSuggestions(false);
+      setRecommendations(result.recommendations);
+      if (result.weather) {
+        setWeather(result.weather);
+      }
       
       toast({
         title: "AI suggestions ready! ✨",
-        description: `Got ${mockSuggestions.length} personalized recommendations${city ? ` for ${city}` : ''}`,
+        description: `Got ${result.recommendations.length} personalized recommendations${city ? ` for ${city}` : ''}`,
       });
-    }, 2000);
+    } catch (error) {
+      console.error('Failed to get suggestions:', error);
+      toast({
+        title: "Failed to get suggestions",
+        description: "There was an error getting AI recommendations. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
   };
 
   const handleRefreshSuggestions = () => {
@@ -81,39 +66,35 @@ const Suggestions = () => {
     }
   };
 
-  const generateQuickSuggestions = () => {
+  const generateQuickSuggestions = async () => {
     setIsLoadingSuggestions(true);
     
-    setTimeout(() => {
-      const quickSuggestions: Recommendation[] = [
-        {
-          id: 'quick-1',
-          suggestion_text: 'Business Casual Look',
-          reason: 'Perfect for work meetings or professional events. Combines comfort with sophistication.',
-          fallback_text: 'Professional and polished outfit choice'
-        },
-        {
-          id: 'quick-2',
-          suggestion_text: 'Weekend Casual',
-          reason: 'Relaxed and comfortable for weekend activities while still looking put-together.',
-          fallback_text: 'Comfortable weekend style'
-        },
-        {
-          id: 'quick-3',
-          suggestion_text: 'Date Night Elegant',
-          reason: 'Sophisticated and romantic outfit perfect for dinner dates or special occasions.',
-          fallback_text: 'Elegant evening look'
-        }
-      ];
+    try {
+      // Get suggestions without specific files, just based on weather
+      const result = await apiClient.suggestOutfits({
+        hemisphere: 'north',
+        units: 'metric'
+      });
       
-      setRecommendations(quickSuggestions);
-      setIsLoadingSuggestions(false);
+      setRecommendations(result.recommendations);
+      if (result.weather) {
+        setWeather(result.weather);
+      }
       
       toast({
         title: "Quick suggestions ready! ⚡",
-        description: `Generated ${quickSuggestions.length} style ideas instantly`,
+        description: `Generated ${result.recommendations.length} style ideas instantly`,
       });
-    }, 1000);
+    } catch (error) {
+      console.error('Failed to get quick suggestions:', error);
+      toast({
+        title: "Failed to get suggestions",
+        description: "There was an error getting quick recommendations. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
   };
 
   return (
@@ -158,15 +139,17 @@ const Suggestions = () => {
           </div>
 
           {/* Weather Info Card */}
-          <div className="fashion-card bg-gradient-soft max-w-md mx-auto text-center">
-            <h3 className="font-semibold mb-2">Current Conditions</h3>
-            <p className="text-muted-foreground">
-              {mockWeather.season} • {mockWeather.condition}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Recommendations will be tailored to current weather
-            </p>
-          </div>
+          {weather && (
+            <div className="fashion-card bg-gradient-soft max-w-md mx-auto text-center">
+              <h3 className="font-semibold mb-2">Current Conditions</h3>
+              <p className="text-muted-foreground">
+                {weather.season} • {weather.condition}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Recommendations are tailored to current weather
+              </p>
+            </div>
+          )}
 
           {/* Outfit Suggestion Input */}
           <OutfitSuggestion
@@ -177,7 +160,7 @@ const Suggestions = () => {
           {/* Recommendations Display */}
           <RecommendationsDisplay
             recommendations={recommendations}
-            weather={mockWeather}
+            weather={weather}
           />
 
           {/* Empty State */}

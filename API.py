@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any
 
-from flask import Flask, request, jsonify, send_from_directory, url_for
+from flask import Flask, request, jsonify, send_from_directory, url_for, send_file
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 
@@ -267,9 +267,27 @@ def upload_outfit_and_suggest():
 
 
 # --- Health Check
-@app.route("/", methods=["GET"])
+@app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()})
+
+# --- Frontend Static Files (for production deployment)
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path):
+    """Serve the React frontend static files"""
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    
+    # If static directory exists (production), serve frontend
+    if os.path.exists(static_dir):
+        if path and os.path.exists(os.path.join(static_dir, path)):
+            return send_from_directory(static_dir, path)
+        else:
+            # For client-side routing, return index.html
+            return send_from_directory(static_dir, "index.html")
+    else:
+        # Development mode - return health check
+        return jsonify({"status": "ok", "time": datetime.utcnow().isoformat(), "mode": "development"})
 
 if __name__ == "__main__":
     # Backend runs on port 8080, frontend will run on port 5000

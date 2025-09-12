@@ -4,7 +4,6 @@ import {
   Home, 
   Shirt, 
   Sparkles, 
-  User, 
   Menu, 
   X,
   MapPin,
@@ -26,7 +25,6 @@ const Navigation = () => {
     { path: '/', label: 'Home', icon: Home },
     { path: '/wardrobe', label: 'Wardrobe', icon: Shirt },
     { path: '/suggestions', label: 'Suggestions', icon: Sparkles },
-    { path: '/profile', label: 'Profile', icon: User },
   ];
 
   const handleLocationTime = () => {
