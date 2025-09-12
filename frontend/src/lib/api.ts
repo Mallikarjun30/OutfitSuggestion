@@ -38,10 +38,44 @@ interface SuggestionsResponse {
   notes?: string;
 }
 
+// Helper function to extract a clean name from the AI description
+const extractItemName = (description: string): string => {
+  if (!description) return "Clothing Item";
+  
+  // Try to extract clothing type from structured description
+  const typeMatch = description.match(/TYPE:\s*([^,\n]+)/i);
+  if (typeMatch) {
+    return typeMatch[1].replace(/_/g, ' ').trim();
+  }
+  
+  // Try to extract first line that looks like an item type
+  const lines = description.split('\n');
+  for (const line of lines) {
+    const cleanLine = line.trim().replace(/[:\-*]/g, '');
+    if (cleanLine.length > 0 && cleanLine.length < 50 && 
+        /^[A-Z][A-Z\s_-]+$/.test(cleanLine)) {
+      return cleanLine.replace(/_/g, ' ').toLowerCase()
+        .replace(/\b\w/g, l => l.toUpperCase());
+    }
+  }
+  
+  // Fallback to generic name based on common clothing terms
+  const clothingTerms = ['shirt', 't-shirt', 'jeans', 'pants', 'dress', 'jacket', 'hoodie', 'sweater', 'skirt', 'shorts', 'blouse', 'top', 'bottom', 'hat', 'cap', 'beanie'];
+  const lowerDesc = description.toLowerCase();
+  
+  for (const term of clothingTerms) {
+    if (lowerDesc.includes(term)) {
+      return term.charAt(0).toUpperCase() + term.slice(1);
+    }
+  }
+  
+  return "Clothing Item";
+};
+
 // Helper function to map backend wardrobe item to frontend format
 const mapWardrobeItem = (item: BackendWardrobeItem): FrontendWardrobeItem => ({
   id: item.id.toString(),
-  name: item.description || item.filename.replace(/\.[^/.]+$/, ""),
+  name: extractItemName(item.description || ''),
   image_url: item.file_url,
   fallback_text: item.description || `${item.filename} - Wardrobe item`
 });
