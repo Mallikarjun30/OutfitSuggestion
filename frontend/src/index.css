@@ -1,68 +1,297 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+/* Fashion-forward AI Wardrobe Stylist Design System */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
+@layer base {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    /* Core Background & Text */
+    --background: 0 0% 100%;
+    --foreground: 210 11% 15%;
+
+    /* Fashion Brand Colors - Enhanced */
+    --primary: 280 100% 70%;        /* Vibrant Purple #C946FF */
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 290 100% 80%;   /* Lighter purple for effects */
+    --primary-dark: 270 100% 60%;   /* Darker purple variant */
+
+    /* Rich Accent Colors */
+    --accent-rose: 340 82% 75%;     /* Rose Gold #F472B6 */
+    --accent-emerald: 160 84% 39%;  /* Emerald #10B981 */
+    --accent-amber: 43 96% 56%;     /* Amber #F59E0B */
+    --accent-indigo: 239 84% 67%;   /* Indigo #6366F1 */
+
+    /* Soft Pastels for Accents */
+    --pastel-lavender: 270 50% 92%;    /* Softer lavender */
+    --pastel-mint: 160 40% 90%;        /* Softer mint */
+    --pastel-peach: 20 60% 90%;        /* Softer peach */
+    --pastel-sky: 200 50% 92%;         /* Softer sky */
+
+    /* Success & CTA Colors */
+    --success: 142 76% 36%;        /* Fresh green for CTAs */
+    --success-foreground: 0 0% 100%;
+
+    /* Neutrals */
+    --card: 0 0% 100%;
+    --card-foreground: 210 11% 15%;
+    --card-soft: 210 20% 98%;      /* Very soft background */
+
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 210 11% 15%;
+
+    --muted: 210 20% 95%;
+    --muted-foreground: 210 8% 46%;
+
+    --accent: 217 91% 95%;         /* Very light blue accent */
+    --accent-foreground: 217 91% 20%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 210 20% 88%;
+    --input: 210 20% 96%;
+    --ring: 217 91% 60%;
+
+    /* Premium Shadows */
+    --shadow-soft: 0 4px 6px -1px hsl(210 20% 20% / 0.08), 0 2px 4px -1px hsl(210 20% 20% / 0.06);
+    --shadow-medium: 0 10px 15px -3px hsl(210 20% 20% / 0.1), 0 4px 6px -2px hsl(210 20% 20% / 0.05);
+    --shadow-glow: 0 20px 25px -5px hsl(217 91% 60% / 0.25);
+
+    /* Enhanced Gradients */
+    --gradient-fashion: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent-rose)));
+    --gradient-pastel: linear-gradient(135deg, hsl(var(--pastel-lavender)), hsl(var(--pastel-mint)));
+    --gradient-soft: linear-gradient(180deg, hsl(var(--card-soft)), hsl(var(--card)));
+    --gradient-success: linear-gradient(135deg, hsl(var(--accent-emerald)), hsl(var(--success)));
+    --gradient-warm: linear-gradient(135deg, hsl(var(--accent-amber)), hsl(var(--accent-rose)));
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --radius: 1rem;  /* Extra rounded for fashion feel */
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-inter antialiased;
+  }
+}
+
+@layer components {
+  /* Fashion-forward Component Styles */
+  .fashion-card {
+    @apply bg-card border border-border rounded-2xl p-6;
+    box-shadow: var(--shadow-soft);
+    transition: var(--transition-smooth);
+  }
+
+  .fashion-card:hover {
+    box-shadow: var(--shadow-medium);
+    transform: translateY(-2px);
+  }
+
+  .fashion-button-primary {
+    @apply bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-2xl;
+    background: var(--gradient-fashion);
+    box-shadow: var(--shadow-soft);
+    transition: var(--transition-bounce);
+  }
+
+  .fashion-button-primary:hover {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .fashion-button-success {
+    @apply bg-success text-success-foreground font-semibold px-6 py-3 rounded-2xl;
+    box-shadow: var(--shadow-soft);
+    transition: var(--transition-bounce);
+  }
+
+  .fashion-button-success:hover {
+    transform: translateY(-1px) scale(1.02);
+    filter: brightness(1.1);
+  }
+
+  .fashion-input {
+    @apply bg-input border border-border rounded-2xl px-4 py-3 text-foreground placeholder:text-muted-foreground;
+    transition: var(--transition-smooth);
+  }
+
+  .fashion-input:focus {
+    @apply outline-none ring-2 ring-primary border-primary;
+  }
+
+  .dropzone {
+    @apply border-2 border-dashed border-border bg-accent/30 rounded-2xl p-8 text-center;
+    background: var(--gradient-soft);
+    transition: var(--transition-smooth);
+  }
+
+  .dropzone:hover {
+    @apply border-primary bg-accent/50;
+  }
+
+  .wardrobe-item {
+    @apply bg-card rounded-2xl overflow-hidden;
+    box-shadow: var(--shadow-soft);
+    transition: var(--transition-smooth);
+  }
+
+  .wardrobe-item:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: var(--shadow-medium);
+  }
+
+  .recommendation-card {
+    @apply bg-card border border-border rounded-2xl p-4;
+    box-shadow: var(--shadow-soft);
+    animation: fadeInUp 0.6s ease-out forwards;
+    opacity: 0;
+    transform: translateY(20px);
+  }
+}
+
+@layer utilities {
+  .font-inter {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+  
+  .bg-gradient-fashion {
+    background: var(--gradient-fashion);
+  }
+  
+  .bg-gradient-pastel {
+    background: var(--gradient-pastel);
+  }
+  
+  .bg-gradient-success {
+    background: var(--gradient-success);
+  }
+  
+  .bg-gradient-warm {
+    background: var(--gradient-warm);
+  }
+  
+  .bg-gradient-soft {
+    background: var(--gradient-soft);
+  }
+  
+  .shadow-fashion-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .shadow-fashion-medium {
+    box-shadow: var(--shadow-medium);
+  }
+  
+  .shadow-fashion-glow {
+    box-shadow: var(--shadow-glow);
+  }
+}
+
+/* Keyframe Animations */
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  40%, 43% {
+    transform: translate3d(0, -8px, 0);
+  }
+  70% {
+    transform: translate3d(0, -4px, 0);
+  }
+  90% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-bounce-custom {
+  animation: bounce 1s infinite;
+}
+
+  .animate-fade-in {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
