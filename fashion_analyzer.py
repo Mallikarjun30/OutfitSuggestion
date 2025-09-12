@@ -69,15 +69,28 @@ class FashionAnalyzer:
         img = Image.open(image_path).convert("RGB")
 
         prompt = (
-            "You are a meticulous fashion analyst. Describe each article of clothing in the image in well-structured, "
-            "clear, human-readable text. For each item, explain: the type of clothing (e.g., t-shirt, jeans), its style "
-            "(casual, formal, streetwear, etc.), colors, patterns, materials, and any notable details (logos, graphics, "
-            "embellishments). Also mention visible accessories. After describing individual items, give an overall summary "
-            "of the outfit, including dominant colors, overall style, which seasons it is suitable for (hot, warm, cool, cold), "
-            "and what occasions it would fit best (work, party, casual, sport, etc.). Make it descriptive, natural, and "
-            "easy to read like a fashion magazine note. If unsure, make reasonable guesses but avoid adding imaginary items."
-            "Dont give ANYTHING other than the description. Every word must have a reason. Everything you give is directly stord in a database. Make sure that the description is not too long and keep it small with keywords. It should be AI - understandable and not Human understandable"
-
+            "You are a fashion AI analyst. Analyze the clothing items in this image and return ONLY a structured JSON response with the following format:\n"
+            "{\n"
+            '  "items": [\n'
+            '    {\n'
+            '      "type": "clothing_type",\n'
+            '      "style": "style_category",\n'
+            '      "colors": ["color1", "color2"],\n'
+            '      "patterns": ["pattern1", "pattern2"],\n'
+            '      "materials": ["material1", "material2"],\n'
+            '      "details": ["detail1", "detail2"]\n'
+            '    }\n'
+            '  ],\n'
+            '  "accessories": ["accessory1", "accessory2"],\n'
+            '  "overall": {\n'
+            '    "dominant_colors": ["color1", "color2"],\n'
+            '    "style": "overall_style",\n'
+            '    "seasons": ["season1", "season2"],\n'
+            '    "occasions": ["occasion1", "occasion2"]\n'
+            '  },\n'
+            '  "description": "Brief AI-readable description with keywords"\n'
+            "}\n"
+            "Return ONLY the JSON object. No additional text, explanations, or formatting. Ensure all values are concise and keyword-focused for AI processing."
         )
 
 

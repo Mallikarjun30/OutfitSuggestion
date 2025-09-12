@@ -219,19 +219,34 @@ def upload_outfit_and_suggest():
 
         # --- Build prompt with multiple outfit images clearly labeled ---
         prompt = (
-        "You are a personal stylist. I have a wardrobe (each item shows its SERIAL ID in brackets) "
-        "and I'm wearing the following outfit today. Multiple images may be provided for different angles. "
-        "Consider ALL outfit images together as one complete outfit. "
-        "Consider the current date, season, and weather. "
-        "Recommend 1-3 items from my wardrobe by SERIAL ID to pair with today's outfit. "
-        "If an ideal item is missing, propose a textual suggestion instead. "
-        "Return JSON with keys: 'recommendations': [ { 'wardrobe_id': <int or null>, 'reason': <string>, "
-        "'fallback_text': <string or null> } ], and 'notes': <string>.\n\n"
-        f"Date: {when.date().isoformat()}  |  Season: {season}  |  Weather: {weather_summary}\n\n"
-        "WARDROBE (ID + description):\n"
+        "You are a personal stylist AI. Analyze the wardrobe and current outfit to provide styling recommendations. "
+        "Return ONLY a properly formatted JSON response with this exact structure:\n"
+        "{\n"
+        '  "recommendations": [\n'
+        '    {\n'
+        '      "wardrobe_id": 123,\n'
+        '      "reason": "Clear reason why this item complements the outfit",\n'
+        '      "fallback_text": null\n'
+        '    },\n'
+        '    {\n'
+        '      "wardrobe_id": null,\n'
+        '      "reason": "Reason for this suggestion",\n'
+        '      "fallback_text": "Specific item suggestion if not in wardrobe"\n'
+        '    }\n'
+        '  ],\n'
+        '  "notes": "Brief overall styling advice",\n'
+        '  "weather_considerations": "How weather affects the recommendations"\n'
+        "}\n\n"
+        "CONTEXT:\n"
+        f"Date: {when.date().isoformat()}\n"
+        f"Season: {season}\n"
+        f"Weather: {weather_summary}\n\n"
+        "AVAILABLE WARDROBE ITEMS (use the ID numbers):\n"
         + "\n".join(wardrobe_digest_lines) + "\n\n"
-        "TODAY'S OUTFIT (multiple images):\n"
-        + "\n".join(outfit_digest_lines)
+        "CURRENT OUTFIT TO STYLE:\n"
+        + "\n".join(outfit_digest_lines) + "\n\n"
+        "Provide 1-3 recommendations. Use wardrobe_id for existing items, or set to null and use fallback_text for missing items. "
+        "Return ONLY the JSON object with no additional formatting or text."
         )
 
         # --- Get AI suggestions ---
@@ -295,7 +310,10 @@ def serve_frontend(path):
         return jsonify({"status": "ok", "time": datetime.utcnow().isoformat(), "mode": "development"})
 
 if __name__ == "__main__":
-    # Use platform port or 5000 for production, 8080 for development
-    port = int(os.getenv('PORT', '8080' if os.getenv('FLASK_ENV') == 'development' else '5000'))
+    # In development: use 8080, in production: use platform PORT or default to 5000
     debug_mode = os.getenv('FLASK_ENV') == 'development' or os.getenv('FLASK_DEBUG') == '1'
+    if debug_mode:
+        port = 8080  # Development port
+    else:
+        port = int(os.getenv('PORT', '5000'))  # Production port from platform or default
     app.run(host="0.0.0.0", port=port, debug=debug_mode)

@@ -40,7 +40,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python API.py"
+args = "FLASK_ENV=development python API.py"
 waitForPort = 8080
 
 [workflows.workflow.metadata]
@@ -55,8 +55,8 @@ localPort = 8080
 externalPort = 8080
 
 [[ports]]
-localPort = 38591
-externalPort = 3001
+localPort = 46579
+externalPort = 3002
 
 [[ports]]
 localPort = 46673
