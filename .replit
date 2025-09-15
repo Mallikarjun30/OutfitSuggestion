@@ -63,6 +63,6 @@ localPort = 46673
 externalPort = 3000
 
 [deployment]
-deploymentTarget = "vm"
-run = ["python", "API.py"]
+deploymentTarget = "autoscale"
+run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
 build = ["bash", "-c", "cd frontend && npm ci && npm run build"]
