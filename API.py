@@ -143,6 +143,8 @@ def upload_outfit_and_suggest():
     date_str = request.form.get("date")
     lat = request.form.get("lat")
     lon = request.form.get("lon")
+    gender = request.form.get("gender")
+    skin_tone = request.form.get("skin_tone")
 
     # --- Handle multiple files ---
     files = request.files.getlist("files")
@@ -258,7 +260,10 @@ def upload_outfit_and_suggest():
             "CONTEXT:\n"
             f"Date: {when.date().isoformat()}\n"
             f"Season: {season}\n"
-            f"Weather: {weather_summary}\n\n"
+            f"Weather: {weather_summary}\n"
+            + (f"Gender: {gender}\n" if gender else "")
+            + (f"Skin Tone: {skin_tone}\n" if skin_tone else "")
+            + "\n"
             "AVAILABLE WARDROBE ITEMS (use the ID numbers):\n"
             + "\n".join(wardrobe_digest_lines) + "\n\n"
             "CURRENT OUTFIT TO STYLE:\n"

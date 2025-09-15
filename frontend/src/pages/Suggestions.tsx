@@ -24,7 +24,7 @@ const Suggestions = () => {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const { toast } = useToast();
 
-  const handleGetSuggestions = async (files: File[], city?: string) => {
+  const handleGetSuggestions = async (files: File[], city?: string, profile?: { gender: string; skinTone: string }) => {
     setIsLoadingSuggestions(true);
     
     try {
@@ -32,7 +32,8 @@ const Suggestions = () => {
         files: files.length > 0 ? files : undefined,
         city: city || undefined,
         hemisphere: 'north', // Default hemisphere
-        units: 'metric'
+        units: 'metric',
+        profile: profile
       });
       
       setRecommendations(result.recommendations);
