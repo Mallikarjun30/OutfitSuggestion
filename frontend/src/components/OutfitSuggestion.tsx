@@ -3,7 +3,7 @@ import { MapPin, Sparkles, Upload, Loader2, Image as ImageIcon, User } from 'luc
 import { cn } from '@/lib/utils';
 
 interface OutfitSuggestionProps {
-  onGetSuggestions: (files: File[], city?: string, profile?: { gender: string; skinTone: string }) => void;
+  onGetSuggestions: (files: File[], city?: string) => void;
   isLoading: boolean;
 }
 
@@ -11,8 +11,6 @@ const OutfitSuggestion = ({ onGetSuggestions, isLoading }: OutfitSuggestionProps
   const [city, setCity] = useState('');
   const [outfitFiles, setOutfitFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [gender, setGender] = useState('');
-  const [skinTone, setSkinTone] = useState('');
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -41,8 +39,7 @@ const OutfitSuggestion = ({ onGetSuggestions, isLoading }: OutfitSuggestionProps
   };
 
   const handleGetSuggestions = () => {
-    const profile = gender && skinTone ? { gender, skinTone } : undefined;
-    onGetSuggestions(outfitFiles, city || undefined, profile);
+    onGetSuggestions(outfitFiles, city || undefined);
   };
 
   const removeFile = (index: number) => {
@@ -57,50 +54,6 @@ const OutfitSuggestion = ({ onGetSuggestions, isLoading }: OutfitSuggestionProps
       </h2>
       
       <div className="space-y-6">
-        {/* Profile Section */}
-        <div className="space-y-4 p-4 bg-gradient-soft rounded-lg border border-border">
-          <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-            <User className="w-4 h-4 text-primary" />
-            Profile Information
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Gender</label>
-              <select
-                value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                className="fashion-input w-full text-sm"
-                required
-              >
-                <option value="">Select Gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Skin Tone</label>
-              <select
-                value={skinTone}
-                onChange={(e) => setSkinTone(e.target.value)}
-                className="fashion-input w-full text-sm"
-                required
-              >
-                <option value="">Select Skin Tone</option>
-                <option value="Very Light">Very Light</option>
-                <option value="Light">Light</option>
-                <option value="Medium Light">Medium Light</option>
-                <option value="Medium">Medium</option>
-                <option value="Medium Deep">Medium Deep</option>
-                <option value="Deep">Deep</option>
-                <option value="Very Deep">Very Deep</option>
-              </select>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            ✨ This information helps our AI provide more personalized outfit suggestions
-          </p>
-        </div>
-
         {/* City Input */}
         <div>
           <label className="block text-sm font-medium mb-2 flex items-center gap-2">
