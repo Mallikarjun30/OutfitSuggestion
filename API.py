@@ -17,6 +17,7 @@ from flask_cors import CORS
 
 # --- App Setup
 app = Flask(__name__)
+app.secret_key = os.environ.get("SESSION_SECRET")
 # Configure CORS - allow localhost in development, restrict in production
 if os.getenv('FLASK_ENV') == 'development' or app.debug:
     CORS(app, origins=['http://localhost:5000', 'http://127.0.0.1:5000'])  # Restrict to frontend dev server
