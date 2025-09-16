@@ -3,8 +3,7 @@ import json
 from typing import Optional, Tuple, Dict, Any
 from dotenv import load_dotenv
 from PIL import Image
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 
 load_dotenv()
 
@@ -14,7 +13,8 @@ class FashionAnalyzer:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables")
-        self.client = genai.Client(api_key=api_key)
+        genai.configure(api_key=api_key)
+        self.client = genai
         self.model = model
 
     def _extract_json_block(self, text: str) -> Optional[str]:
@@ -94,10 +94,8 @@ class FashionAnalyzer:
         )
 
 
-        resp = self.client.models.generate_content(
-            model=self.model,
-            contents=[prompt, img]
-        )
+        model = self.client.GenerativeModel(self.model)
+        resp = model.generate_content([prompt, img])
 
         raw = resp.text or ""
         parsed = self._coerce_json(raw)
@@ -107,8 +105,6 @@ class FashionAnalyzer:
         """
         Generate outfit suggestion based on wardrobe and weather context.
         """
-        resp = self.client.models.generate_content(
-            model=self.model,
-            contents=[context_prompt]
-        )
+        model = self.client.GenerativeModel(self.model)
+        resp = model.generate_content([context_prompt])
         return resp.text or ""
