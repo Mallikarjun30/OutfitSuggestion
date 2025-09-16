@@ -3,12 +3,16 @@ import os
 import json
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
+from functools import wraps
 
 from flask import Flask, request, jsonify, send_from_directory, url_for, send_file
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
 
 from fashion_analyzer import FashionAnalyzer
 from weather_client import WeatherClient, infer_season
@@ -17,13 +21,17 @@ from flask_cors import CORS
 
 # --- App Setup
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET")
-# Configure CORS - allow localhost in development, restrict in production
-if os.getenv('FLASK_ENV') == 'development' or app.debug:
-    CORS(app, origins=['http://localhost:5000', 'http://127.0.0.1:5000'])  # Restrict to frontend dev server
-else:
-    # In production, no CORS needed since frontend is served from same origin
-    pass
+app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-production")
+app.config['JWT_SECRET'] = os.environ.get("JWT_SECRET", app.secret_key)
+app.config['JWT_EXPIRATION_DELTA'] = timedelta(days=7)
+
+# Configure CORS
+CORS(app, origins=['*'], supports_credentials=True)
+
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 # --- Config
 WARDROBE_FOLDER = os.path.join("uploads", "wardrobe")
@@ -38,11 +46,82 @@ db = SQLAlchemy(app)
 os.makedirs(WARDROBE_FOLDER, exist_ok=True)
 
 # --- Models
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    skin_tone = db.Column(db.String(50), nullable=True)  # fair, medium, olive, brown, dark
+    gender = db.Column(db.String(20), nullable=True)     # male, female, non-binary, prefer-not-to-say
+    created_at = db.Column(db.Float, default=lambda: time.time())
+    
+    # Relationship to wardrobe items
+    wardrobe_items = db.relationship('WardrobeItem', backref='user', lazy=True, cascade='all, delete-orphan')
+    
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    def generate_token(self):
+        payload = {
+            'user_id': self.id,
+            'exp': datetime.utcnow() + app.config['JWT_EXPIRATION_DELTA']
+        }
+        return jwt.encode(payload, app.config['JWT_SECRET'], algorithm='HS256')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'name': self.name,
+            'skin_tone': self.skin_tone,
+            'gender': self.gender,
+            'created_at': self.created_at
+        }
+
 class WardrobeItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)              # auto-increment primary key
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # owner of the item
     filename = db.Column(db.String(256), nullable=False)      # stored as "<id>.ext"
     description = db.Column(db.Text, nullable=True)           # AI generated description
     created_at = db.Column(db.Float, default=lambda: time.time())  # Unix timestamp
+
+# Flask-Login user loader
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# JWT token verification decorator
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        auth_header = request.headers.get('Authorization')
+        
+        if auth_header:
+            try:
+                token = auth_header.split(' ')[1]  # Bearer <token>
+            except IndexError:
+                return jsonify({'error': 'Invalid token format'}), 401
+        
+        if not token:
+            return jsonify({'error': 'Token missing'}), 401
+        
+        try:
+            payload = jwt.decode(token, app.config['JWT_SECRET'], algorithms=['HS256'])
+            current_user_id = payload['user_id']
+            user = User.query.get(current_user_id)
+            if not user:
+                return jsonify({'error': 'User not found'}), 401
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        return f(user, *args, **kwargs)
+    return decorated
 
 with app.app_context():
     db.create_all()
@@ -60,13 +139,90 @@ def wardrobe_item_to_dict(item: WardrobeItem) -> Dict[str, Any]:
         "filename": item.filename,
         "file_url": url_for("serve_wardrobe_image", item_id=item.id, _external=False),
         "description": item.description,
-        "created_at": item.created_at
+        "created_at": item.created_at,
+        "user_id": item.user_id
     }
+
+# --- Authentication Endpoints
+@app.route("/auth/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    
+    if not data or not all(k in data for k in ('email', 'password', 'name')):
+        return jsonify({'error': 'Missing required fields: email, password, name'}), 400
+    
+    email = data['email'].lower().strip()
+    
+    if User.query.filter_by(email=email).first():
+        return jsonify({'error': 'Email already registered'}), 400
+    
+    user = User(
+        email=email,
+        name=data['name'].strip(),
+        skin_tone=data.get('skin_tone'),
+        gender=data.get('gender')
+    )
+    user.set_password(data['password'])
+    
+    db.session.add(user)
+    db.session.commit()
+    
+    token = user.generate_token()
+    return jsonify({
+        'message': 'User registered successfully',
+        'token': token,
+        'user': user.to_dict()
+    }), 201
+
+@app.route("/auth/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    
+    if not data or not all(k in data for k in ('email', 'password')):
+        return jsonify({'error': 'Missing email or password'}), 400
+    
+    email = data['email'].lower().strip()
+    user = User.query.filter_by(email=email).first()
+    
+    if not user or not user.check_password(data['password']):
+        return jsonify({'error': 'Invalid email or password'}), 401
+    
+    token = user.generate_token()
+    return jsonify({
+        'message': 'Login successful',
+        'token': token,
+        'user': user.to_dict()
+    }), 200
+
+@app.route("/auth/profile", methods=["GET"])
+@token_required
+def get_profile(current_user):
+    return jsonify({'user': current_user.to_dict()}), 200
+
+@app.route("/auth/profile", methods=["PUT"])
+@token_required
+def update_profile(current_user):
+    data = request.get_json()
+    
+    if 'name' in data:
+        current_user.name = data['name'].strip()
+    if 'skin_tone' in data:
+        current_user.skin_tone = data['skin_tone']
+    if 'gender' in data:
+        current_user.gender = data['gender']
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Profile updated successfully',
+        'user': current_user.to_dict()
+    }), 200
 
 # --- Wardrobe Endpoints
 
 @app.route("/wardrobe", methods=["POST"])
-def upload_wardrobe():
+@token_required
+def upload_wardrobe(current_user):
     files = request.files.getlist("files")
     if not files:
         single = request.files.get("file")
@@ -81,7 +237,7 @@ def upload_wardrobe():
             continue
 
         # Step 1: create a blank DB record to get the ID first
-        temp_record = WardrobeItem(filename="", description="")
+        temp_record = WardrobeItem(filename="", description="", user_id=current_user.id)
         db.session.add(temp_record)
         db.session.flush()  # generate ID without commit
 
@@ -105,20 +261,23 @@ def upload_wardrobe():
 
 
 @app.route("/wardrobe", methods=["GET"])
-def list_wardrobe():
-    items = WardrobeItem.query.order_by(WardrobeItem.created_at.desc()).all()
+@token_required
+def list_wardrobe(current_user):
+    items = WardrobeItem.query.filter_by(user_id=current_user.id).order_by(WardrobeItem.created_at.desc()).all()
     return jsonify([wardrobe_item_to_dict(i) for i in items])
 
 
 @app.route("/wardrobe/<int:item_id>", methods=["GET"])
-def get_wardrobe_item(item_id):
-    item = WardrobeItem.query.get_or_404(item_id)
+@token_required
+def get_wardrobe_item(current_user, item_id):
+    item = WardrobeItem.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
     return jsonify(wardrobe_item_to_dict(item))
 
 
 @app.route("/wardrobe/<int:item_id>", methods=["DELETE"])
-def delete_wardrobe_item(item_id):
-    item = WardrobeItem.query.get_or_404(item_id)
+@token_required
+def delete_wardrobe_item(current_user, item_id):
+    item = WardrobeItem.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
     path = os.path.join(WARDROBE_FOLDER, item.filename)
     if os.path.exists(path):
         os.remove(path)
@@ -128,15 +287,17 @@ def delete_wardrobe_item(item_id):
 
 
 @app.route("/wardrobe/<int:item_id>/file", methods=["GET"])
-def serve_wardrobe_image(item_id):
-    item = WardrobeItem.query.get_or_404(item_id)
+@token_required
+def serve_wardrobe_image(current_user, item_id):
+    item = WardrobeItem.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
     return send_from_directory(WARDROBE_FOLDER, item.filename)
 
 
 # --- Outfit Suggestion Endpoint (unchanged except no parsed_json used)
 
 @app.route("/outfit", methods=["POST"])
-def upload_outfit_and_suggest():
+@token_required
+def upload_outfit_and_suggest(current_user):
     city = request.form.get("city")
     hemisphere = (request.form.get("hemisphere") or "north").lower()
     units = (request.form.get("units") or "metric").lower()
@@ -215,7 +376,7 @@ def upload_outfit_and_suggest():
             weather_summary = f"{main} ({desc}), temp={temp} {('°C' if units=='metric' else '°F')}"
 
         # --- Wardrobe summary for prompt ---
-        wardrobe_items = WardrobeItem.query.order_by(WardrobeItem.created_at.desc()).limit(MAX_PROMPT_WARDROBE).all()
+        wardrobe_items = WardrobeItem.query.filter_by(user_id=current_user.id).order_by(WardrobeItem.created_at.desc()).limit(MAX_PROMPT_WARDROBE).all()
         wardrobe_digest_lines = [f"[{wi.id}] {wi.description}" for wi in wardrobe_items]
 
         # --- Outfit description block ---
