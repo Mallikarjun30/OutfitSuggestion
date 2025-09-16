@@ -67,13 +67,13 @@ const Register = () => {
     setIsLoading(true);
 
     try {
-      await register({
-        email: formData.email,
-        password: formData.password,
-        name: formData.name,
-        skinTone: formData.skinTone || undefined,
-        gender: formData.gender || undefined,
-      });
+      await register(
+        formData.email,
+        formData.password,
+        formData.name,
+        formData.skinTone || undefined,
+        formData.gender || undefined
+      );
 
       navigate(from, { replace: true });
     } catch (err) {
