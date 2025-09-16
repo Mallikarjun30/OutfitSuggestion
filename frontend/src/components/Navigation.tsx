@@ -172,9 +172,11 @@ const Navigation = () => {
                   <div className="px-2 py-1.5 text-sm font-medium">{user.name}</div>
                   <div className="px-2 py-1.5 text-xs text-muted-foreground">{user.email}</div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <Settings className="w-4 h-4 mr-2" />
-                    Profile Settings
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="flex items-center">
+                      <Settings className="w-4 h-4 mr-2" />
+                      Profile Settings
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout}>
