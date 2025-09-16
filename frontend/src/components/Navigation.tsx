@@ -7,10 +7,22 @@ import {
   Menu, 
   X,
   MapPin,
-  Clock
+  Clock,
+  User,
+  LogOut,
+  Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,6 +32,7 @@ const Navigation = () => {
   } | null>(null);
   const location = useLocation();
   const { toast } = useToast();
+  const { user, logout } = useAuth();
 
   const navItems = [
     { path: '/', label: 'Home', icon: Home },
@@ -145,6 +158,45 @@ const Navigation = () => {
               <Clock className="w-4 h-4" />
               Get Location
             </button>
+            
+            {/* Auth Section */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2 px-3 py-2 rounded-xl">
+                    <User className="w-4 h-4" />
+                    <span className="hidden lg:inline">{user.name}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5 text-sm font-medium">{user.name}</div>
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">{user.email}</div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>
+                    <Settings className="w-4 h-4 mr-2" />
+                    Profile Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link to="/login">
+                  <Button variant="ghost" size="sm">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link to="/register">
+                  <Button size="sm" className="fashion-button-primary">
+                    Sign Up
+                  </Button>
+                </Link>
+              </div>
+            )}
           </nav>
 
           {/* Mobile Menu Button */}

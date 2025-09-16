@@ -111,21 +111,44 @@ const mapWardrobeItem = (item: BackendWardrobeItem): FrontendWardrobeItem => ({
 
 // API Client class
 class ApiClient {
+  private getAuthToken(): string | null {
+    return localStorage.getItem('auth_token');
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const token = this.getAuthToken();
+    
+    const headers: Record<string, string> = {
+      ...options.headers as Record<string, string>,
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // Add Content-Type for JSON requests
+    if (options.body && typeof options.body === 'string') {
+      headers['Content-Type'] = 'application/json';
+    }
     
     try {
       const response = await fetch(url, {
         ...options,
-        headers: {
-          ...options.headers,
-        },
+        headers,
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired or invalid, redirect to login
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_user');
+          window.location.href = '/login';
+          throw new Error('Authentication required');
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
@@ -145,6 +168,11 @@ class ApiClient {
 
   // Upload wardrobe items
   async uploadWardrobe(files: File[]): Promise<FrontendWardrobeItem[]> {
+    const token = this.getAuthToken();
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
     const formData = new FormData();
     files.forEach(file => {
       formData.append('files', file);
@@ -152,10 +180,19 @@ class ApiClient {
 
     const response = await fetch(`${API_BASE_URL}/wardrobe`, {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
       body: formData,
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        window.location.href = '/login';
+        throw new Error('Authentication required');
+      }
       throw new Error(`Upload failed: ${response.status}`);
     }
 
@@ -216,8 +253,16 @@ class ApiClient {
       formData.append('skin_tone', params.profile.skinTone);
     }
 
+    const token = this.getAuthToken();
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
     const response = await fetch(`${API_BASE_URL}/outfit`, {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
       body: formData,
     });
 
