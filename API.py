@@ -6,10 +6,12 @@ import uuid
 import hmac
 import hashlib
 import base64
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from functools import wraps
 
+import flask
 from flask import Flask, request, jsonify, send_from_directory, url_for, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
@@ -20,6 +22,37 @@ from fashion_analyzer import FashionAnalyzer
 from weather_client import WeatherClient, infer_season
 
 from flask_cors import CORS
+
+# --- Structured Logging Setup
+class RequestFormatter(logging.Formatter):
+    def format(self, record):
+        if hasattr(flask.g, 'request_id'):
+            record.request_id = flask.g.request_id
+        else:
+            record.request_id = 'unknown'
+        
+        log_data = {
+            'timestamp': self.formatTime(record),
+            'level': record.levelname,
+            'request_id': record.request_id,
+            'message': record.getMessage(),
+            'module': record.module,
+            'line': record.lineno
+        }
+        
+        if hasattr(record, 'user_id'):
+            log_data['user_id'] = record.user_id
+        if hasattr(record, 'method'):
+            log_data['method'] = record.method
+        if hasattr(record, 'path'):
+            log_data['path'] = record.path
+            
+        return json.dumps(log_data)
+
+handler = logging.StreamHandler()
+handler.setFormatter(RequestFormatter())
+logging.basicConfig(level=logging.DEBUG, handlers=[handler])
+logger = logging.getLogger(__name__)
 
 # --- App Setup
 app = Flask(__name__)
@@ -46,6 +79,36 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 os.makedirs(WARDROBE_FOLDER, exist_ok=True)
+
+# --- Request ID middleware for logging
+@app.before_request
+def before_request():
+    import flask
+    request_id = str(uuid.uuid4())[:8]
+    flask.g.request_id = request_id
+    flask.g.start_time = time.time()
+    
+    extra = {
+        'method': request.method,
+        'path': request.path,
+        'user_id': getattr(flask.g, 'current_user_id', None)
+    }
+    logger.info("Request started", extra=extra)
+
+@app.after_request
+def after_request(response):
+    import flask
+    duration = time.time() - flask.g.start_time if hasattr(flask.g, 'start_time') else 0
+    
+    extra = {
+        'method': request.method,
+        'path': request.path,
+        'status_code': response.status_code,
+        'duration_ms': round(duration * 1000, 2),
+        'user_id': getattr(flask.g, 'current_user_id', None)
+    }
+    logger.info("Request completed", extra=extra)
+    return response
 
 # --- Minimal self-contained JWT implementation (HS256)
 class ExpiredSignatureError(Exception):
@@ -387,8 +450,36 @@ def upload_outfit_and_suggest(current_user):
     date_str = request.form.get("date")
     lat = request.form.get("lat")
     lon = request.form.get("lon")
-    gender = request.form.get("gender")
-    skin_tone = request.form.get("skin_tone")
+    # Get gender and skin_tone from user profile instead of form data
+    gender = current_user.gender
+    skin_tone = current_user.skin_tone
+    
+    # Handle incomplete profiles
+    if not gender or not skin_tone:
+        missing_fields = []
+        if not gender: missing_fields.append('gender')
+        if not skin_tone: missing_fields.append('skin tone')
+        
+        logger.warning("User has incomplete profile", extra={
+            'user_id': current_user.id,
+            'missing_fields': missing_fields
+        })
+        
+        return jsonify({
+            "error": "Profile incomplete",
+            "message": f"Please complete your profile by adding: {', '.join(missing_fields)}. Visit your profile page to update this information.",
+            "missing_fields": missing_fields
+        }), 400
+    
+    # Store user_id in flask.g for logging
+    flask.g.current_user_id = current_user.id
+    
+    logger.info("Outfit suggestion request", extra={
+        'user_id': current_user.id,
+        'city': city,
+        'gender': gender,
+        'skin_tone': skin_tone
+    })
 
     # --- Handle multiple files ---
     files = request.files.getlist("files")
@@ -444,12 +535,17 @@ def upload_outfit_and_suggest(current_user):
         # --- Get weather data (city OR lat/lon) ---
         weather_json = None
         if city:
+            logger.info(f"Fetching weather for city: {city}")
             weather_json = weather_client.current_by_city(city=city, units=units)
         elif lat and lon:
             try:
+                logger.info(f"Fetching weather for coordinates: {lat}, {lon}")
                 weather_json = weather_client.current_by_coords(lat=float(lat), lon=float(lon), units=units)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Failed to get weather by coordinates: {e}")
                 weather_json = None
+        
+        logger.info(f"Weather data obtained: {weather_json is not None}")
 
         weather_summary = "unknown"
         if weather_json:
@@ -461,6 +557,7 @@ def upload_outfit_and_suggest(current_user):
         # --- Wardrobe summary for prompt ---
         wardrobe_items = WardrobeItem.query.filter_by(user_id=current_user.id).order_by(WardrobeItem.created_at.desc()).limit(MAX_PROMPT_WARDROBE).all()
         wardrobe_digest_lines = [f"[{wi.id}] {wi.description}" for wi in wardrobe_items]
+        logger.info(f"Using {len(wardrobe_items)} wardrobe items for suggestions")
 
         # --- Outfit description block ---
         outfit_digest_lines = [
@@ -528,7 +625,9 @@ def upload_outfit_and_suggest(current_user):
 
 
         # --- Get AI suggestions ---
+        logger.info(f"Sending prompt to AI analyzer (length: {len(prompt)} chars)")
         suggestion_text = analyzer.suggest(prompt)
+        logger.info(f"Received AI response (length: {len(suggestion_text)} chars)")
         try:
             # Handle markdown code blocks and clean the JSON
             clean_text = suggestion_text.strip()
@@ -542,7 +641,7 @@ def upload_outfit_and_suggest(current_user):
             
             suggestion_json = json.loads(clean_text)
         except Exception as e:
-            print(f"JSON parsing failed: {e}")
+            logger.error(f"JSON parsing failed: {e}")
             suggestion_json = {"recommendations": [], "notes": suggestion_text}
 
         out_recs = []
@@ -555,6 +654,8 @@ def upload_outfit_and_suggest(current_user):
                 item = WardrobeItem.query.get(wid)
                 resolved["item"] = wardrobe_item_to_dict(item) if item else None
             out_recs.append(resolved)
+        
+        logger.info(f"Generated {len(out_recs)} outfit recommendations")
 
         return jsonify({
             "outfit_descriptions": outfit_descriptions,
@@ -572,7 +673,7 @@ def upload_outfit_and_suggest(current_user):
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
             except Exception as e:
-                print(f"Warning: Could not cleanup temp file {temp_file}: {e}")
+                logger.warning(f"Could not cleanup temp file {temp_file}: {e}")
 
 
 # --- Health Check

@@ -143,7 +143,6 @@ class ApiClient {
     hemisphere?: string;
     units?: string;
     date?: string;
-    profile?: { gender: string; skinTone: string };
   }) {
     const formData = new FormData();
     params.files?.forEach((file) => formData.append("files", file));
@@ -151,10 +150,6 @@ class ApiClient {
     if (params.hemisphere) formData.append("hemisphere", params.hemisphere);
     if (params.units) formData.append("units", params.units);
     if (params.date) formData.append("date", params.date);
-    if (params.profile) {
-      formData.append("gender", params.profile.gender);
-      formData.append("skin_tone", params.profile.skinTone);
-    }
 
     const data: SuggestionsResponse = await this.request("/outfit", { method: "POST", body: formData });
 

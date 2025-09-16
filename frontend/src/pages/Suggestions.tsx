@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import OutfitSuggestion from '@/components/OutfitSuggestion';
 import RecommendationsDisplay from '@/components/RecommendationsDisplay';
-import { Sparkles, Zap, RefreshCw, User } from 'lucide-react';
+import { Sparkles, Zap, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api';
 
@@ -22,22 +22,9 @@ const Suggestions = () => {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [weather, setWeather] = useState<Weather | null>(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [gender, setGender] = useState('');
-  const [skinTone, setSkinTone] = useState('');
   const { toast } = useToast();
 
-  const isProfileComplete = gender && skinTone;
-
   const handleGetSuggestions = async (files: File[], city?: string) => {
-    if (!isProfileComplete) {
-      toast({
-        title: "Profile required",
-        description: "Please fill in your gender and skin tone above for personalized suggestions.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsLoadingSuggestions(true);
     
     try {
@@ -45,8 +32,7 @@ const Suggestions = () => {
         files: files.length > 0 ? files : undefined,
         city: city || undefined,
         hemisphere: 'north', // Default hemisphere
-        units: 'metric',
-        profile: { gender, skinTone }
+        units: 'metric'
       });
       
       setRecommendations(result.recommendations);
@@ -81,23 +67,13 @@ const Suggestions = () => {
   };
 
   const generateQuickSuggestions = async () => {
-    if (!isProfileComplete) {
-      toast({
-        title: "Profile required",
-        description: "Please fill in your gender and skin tone above for personalized suggestions.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     setIsLoadingSuggestions(true);
     
     try {
       // Get suggestions without specific files, just based on weather
       const result = await apiClient.suggestOutfits({
         hemisphere: 'north',
-        units: 'metric',
-        profile: { gender, skinTone }
+        units: 'metric'
       });
       
       setRecommendations(result.recommendations);
@@ -122,55 +98,10 @@ const Suggestions = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background py-8">
+    <div className="min-h-screen bg-background pt-20 pb-8">
       <div className="container mx-auto px-4">
         <div className="max-w-6xl mx-auto space-y-8">
           
-          {/* Profile Section */}
-          <div className="fashion-card">
-            <div className="space-y-4 p-4 bg-gradient-soft rounded-lg border border-border">
-              <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-                <User className="w-4 h-4 text-primary" />
-                Profile Information (Required)
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Gender</label>
-                  <select
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className="fashion-input w-full text-sm"
-                    required
-                  >
-                    <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Skin Tone</label>
-                  <select
-                    value={skinTone}
-                    onChange={(e) => setSkinTone(e.target.value)}
-                    className="fashion-input w-full text-sm"
-                    required
-                  >
-                    <option value="">Select Skin Tone</option>
-                    <option value="Very Light">Very Light</option>
-                    <option value="Light">Light</option>
-                    <option value="Medium Light">Medium Light</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Medium Deep">Medium Deep</option>
-                    <option value="Deep">Deep</option>
-                    <option value="Very Deep">Very Deep</option>
-                  </select>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                ✨ This information helps our AI provide more personalized outfit suggestions for you
-              </p>
-            </div>
-          </div>
 
           {/* Header */}
           <div className="text-center space-y-4">
@@ -192,7 +123,7 @@ const Suggestions = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={generateQuickSuggestions}
-              disabled={isLoadingSuggestions || !isProfileComplete}
+              disabled={isLoadingSuggestions}
               className="fashion-button-success inline-flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Zap className="w-5 h-5" />
@@ -248,8 +179,8 @@ const Suggestions = () => {
                 <div className="space-y-3">
                   <button
                     onClick={generateQuickSuggestions}
-                    disabled={!isProfileComplete}
-                    className="w-full fashion-button-success inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={false}
+                    className="w-full fashion-button-success inline-flex items-center justify-center gap-2"
                   >
                     <Zap className="w-5 h-5" />
                     Get Instant Suggestions

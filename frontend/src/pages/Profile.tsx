@@ -111,7 +111,7 @@ const Profile = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
+    <div className="container mx-auto px-4 pt-20 pb-8 max-w-2xl">
       <div className="space-y-6">
         {/* Header */}
         <div className="text-center">

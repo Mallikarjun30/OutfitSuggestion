@@ -125,7 +125,7 @@ const Wardrobe = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background py-8">
+    <div className="min-h-screen bg-background pt-20 pb-8">
       <div className="container mx-auto px-4">
         <div className="max-w-6xl mx-auto space-y-8">
           
