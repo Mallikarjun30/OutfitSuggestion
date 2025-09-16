@@ -1,8 +1,7 @@
 // API client for connecting to the Flask backend
 
-// Get API base URL - use environment variable or relative paths (same-origin)
 const getApiBaseUrl = () => {
-  return import.meta.env.VITE_API_URL || '';
+  return import.meta.env.VITE_API_URL || "";
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -39,181 +38,105 @@ interface SuggestionsResponse {
   notes?: string;
 }
 
-// Helper function to extract a clean name from the AI description
+// === Helpers ===
+
 const extractItemName = (description: string): string => {
   if (!description) return "Clothing Item";
-  
-  // Try to extract clothing type from structured description
   const typeMatch = description.match(/TYPE:\s*([^,\n]+)/i);
-  if (typeMatch) {
-    return typeMatch[1].replace(/_/g, ' ').trim();
-  }
-  
-  // Try to extract first line that looks like an item type
-  const lines = description.split('\n');
+  if (typeMatch) return typeMatch[1].replace(/_/g, " ").trim();
+
+  const lines = description.split("\n");
   for (const line of lines) {
-    const cleanLine = line.trim().replace(/[:\-*]/g, '');
-    if (cleanLine.length > 0 && cleanLine.length < 50 && 
-        /^[A-Z][A-Z\s_-]+$/.test(cleanLine)) {
-      return cleanLine.replace(/_/g, ' ').toLowerCase()
-        .replace(/\b\w/g, l => l.toUpperCase());
+    const cleanLine = line.trim().replace(/[:\-*]/g, "");
+    if (cleanLine.length > 0 && cleanLine.length < 50 && /^[A-Z][A-Z\s_-]+$/.test(cleanLine)) {
+      return cleanLine.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
     }
   }
-  
-  // Fallback to generic name based on common clothing terms
-  const clothingTerms = ['shirt', 't-shirt', 'jeans', 'pants', 'dress', 'jacket', 'hoodie', 'sweater', 'skirt', 'shorts', 'blouse', 'top', 'bottom', 'hat', 'cap', 'beanie'];
+
+  const clothingTerms = ["shirt", "t-shirt", "jeans", "pants", "dress", "jacket", "hoodie", "sweater", "skirt", "shorts", "blouse", "top", "bottom", "hat", "cap", "beanie"];
   const lowerDesc = description.toLowerCase();
-  
   for (const term of clothingTerms) {
-    if (lowerDesc.includes(term)) {
-      return term.charAt(0).toUpperCase() + term.slice(1);
-    }
+    if (lowerDesc.includes(term)) return term.charAt(0).toUpperCase() + term.slice(1);
   }
-  
   return "Clothing Item";
 };
 
-// Helper function to extract category from the AI description
 const extractItemCategory = (description: string): string => {
   if (!description) return "Other";
-  
   const lowerDesc = description.toLowerCase();
-  
-  // Define category mappings
   const categoryMappings = {
-    'Tops': ['shirt', 't-shirt', 'blouse', 'top', 'tank', 'crop', 'cardigan', 'sweater', 'hoodie', 'jacket', 'blazer', 'coat'],
-    'Bottoms': ['jeans', 'pants', 'trousers', 'shorts', 'skirt', 'dress', 'leggings', 'joggers'],
-    'Outerwear': ['jacket', 'coat', 'blazer', 'cardigan', 'vest', 'outerwear'],
-    'Accessories': ['hat', 'cap', 'beanie', 'scarf', 'belt', 'bag', 'watch', 'jewelry', 'sunglasses'],
-    'Footwear': ['shoes', 'boots', 'sneakers', 'sandals', 'heels', 'flats']
+    Tops: ["shirt", "t-shirt", "blouse", "top", "tank", "crop", "cardigan", "sweater", "hoodie", "jacket", "blazer", "coat"],
+    Bottoms: ["jeans", "pants", "trousers", "shorts", "skirt", "dress", "leggings", "joggers"],
+    Outerwear: ["jacket", "coat", "blazer", "cardigan", "vest", "outerwear"],
+    Accessories: ["hat", "cap", "beanie", "scarf", "belt", "bag", "watch", "jewelry", "sunglasses"],
+    Footwear: ["shoes", "boots", "sneakers", "sandals", "heels", "flats"],
   };
-  
-  // Check each category
+
   for (const [category, terms] of Object.entries(categoryMappings)) {
-    for (const term of terms) {
-      if (lowerDesc.includes(term)) {
-        return category;
-      }
-    }
+    if (terms.some((t) => lowerDesc.includes(t))) return category;
   }
-  
   return "Other";
 };
 
-// Helper function to map backend wardrobe item to frontend format
 const mapWardrobeItem = (item: BackendWardrobeItem): FrontendWardrobeItem => ({
   id: item.id.toString(),
-  name: extractItemName(item.description || ''),
+  name: extractItemName(item.description || ""),
   image_url: item.file_url,
   fallback_text: item.description || `${item.filename} - Wardrobe item`,
-  category: extractItemCategory(item.description || '')
+  category: extractItemCategory(item.description || ""),
 });
 
-// API Client class
+// === API Client ===
+
 class ApiClient {
   private getAuthToken(): string | null {
-    return localStorage.getItem('auth_token');
+    return localStorage.getItem("auth_token"); // ✅ make sure Login.tsx uses same key
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const token = this.getAuthToken();
-    
-    const headers: Record<string, string> = {
-      ...options.headers as Record<string, string>,
-    };
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    // Add Content-Type for JSON requests
-    if (options.body && typeof options.body === 'string') {
-      headers['Content-Type'] = 'application/json';
-    }
-    
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      });
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = this.getAuthToken();
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Token expired or invalid, redirect to login
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('auth_user');
-          window.location.href = '/login';
-          throw new Error('Authentication required');
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string>),
+  };
 
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error(`API request failed:`, error);
-      throw error;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (options.body && typeof options.body === "string") headers["Content-Type"] = "application/json";
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+    credentials: "include", // ✅ THIS is critical for sending cookies
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("auth_user");
+      window.location.href = "/login";
     }
+    throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  // Get all wardrobe items
+  return response.json();
+}
+
   async listWardrobe(): Promise<FrontendWardrobeItem[]> {
-    const response = await this.request<BackendWardrobeItem[]>('/wardrobe');
+    const response = await this.request<BackendWardrobeItem[]>("/wardrobe");
     return response.map(mapWardrobeItem);
   }
 
-  // Upload wardrobe items
   async uploadWardrobe(files: File[]): Promise<FrontendWardrobeItem[]> {
-    const token = this.getAuthToken();
-    if (!token) {
-      throw new Error('Authentication required');
-    }
-
     const formData = new FormData();
-    files.forEach(file => {
-      formData.append('files', file);
-    });
-
-    const response = await fetch(`${API_BASE_URL}/wardrobe`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('auth_user');
-        window.location.href = '/login';
-        throw new Error('Authentication required');
-      }
-      throw new Error(`Upload failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.uploaded.map(mapWardrobeItem);
+    files.forEach((file) => formData.append("files", file));
+    return this.request("/wardrobe", { method: "POST", body: formData });
   }
 
-  // Delete a wardrobe item
   async deleteWardrobe(id: string): Promise<boolean> {
-    try {
-      await this.request(`/wardrobe/${id}`, {
-        method: 'DELETE',
-      });
-      return true;
-    } catch (error) {
-      console.error('Delete failed:', error);
-      return false;
-    }
+    await this.request(`/wardrobe/${id}`, { method: "DELETE" });
+    return true;
   }
 
-  // Get outfit suggestions
   async suggestOutfits(params: {
     files?: File[];
     city?: string;
@@ -221,80 +144,42 @@ class ApiClient {
     units?: string;
     date?: string;
     profile?: { gender: string; skinTone: string };
-  }): Promise<{
-    recommendations: Array<{
-      id?: string;
-      suggestion_text: string;
-      reason: string;
-      image_url?: string;
-      fallback_text?: string;
-    }>;
-    weather?: {
-      season: string;
-      condition: string;
-    };
-  }> {
+  }) {
     const formData = new FormData();
-    
-    // Add files if provided
-    if (params.files) {
-      params.files.forEach(file => {
-        formData.append('files', file);
-      });
-    }
-
-    // Add other parameters
-    if (params.city) formData.append('city', params.city);
-    if (params.hemisphere) formData.append('hemisphere', params.hemisphere);
-    if (params.units) formData.append('units', params.units);
-    if (params.date) formData.append('date', params.date);
+    params.files?.forEach((file) => formData.append("files", file));
+    if (params.city) formData.append("city", params.city);
+    if (params.hemisphere) formData.append("hemisphere", params.hemisphere);
+    if (params.units) formData.append("units", params.units);
+    if (params.date) formData.append("date", params.date);
     if (params.profile) {
-      formData.append('gender', params.profile.gender);
-      formData.append('skin_tone', params.profile.skinTone);
+      formData.append("gender", params.profile.gender);
+      formData.append("skin_tone", params.profile.skinTone);
     }
 
-    const token = this.getAuthToken();
-    if (!token) {
-      throw new Error('Authentication required');
-    }
+    const data: SuggestionsResponse = await this.request("/outfit", { method: "POST", body: formData });
 
-    const response = await fetch(`${API_BASE_URL}/outfit`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Suggestions failed: ${response.status}`);
-    }
-
-    const data: SuggestionsResponse = await response.json();
-    
-    // Map backend response to frontend format
-    const recommendations = data.suggestions.map((suggestion, index) => ({
-      id: suggestion.wardrobe_id?.toString() || `suggestion-${index}`,
-      suggestion_text: extractItemName(suggestion.item?.description || '') || suggestion.fallback_text || 'AI-generated suggestion',
+    const recommendations = data.suggestions.map((suggestion, i) => ({
+      id: suggestion.wardrobe_id?.toString() || `suggestion-${i}`,
+      suggestion_text: extractItemName(suggestion.item?.description || "") || suggestion.fallback_text || "AI suggestion",
       reason: suggestion.reason,
       image_url: suggestion.item?.file_url,
-      fallback_text: suggestion.fallback_text
+      fallback_text: suggestion.fallback_text,
     }));
 
-    const weather = data.weather ? {
-      season: data.season,
-      condition: data.weather.weather?.[0]?.main || data.weather.weather?.[0]?.description || 'Unknown'
-    } : undefined;
+    const weather = data.weather
+      ? {
+          season: data.season,
+          condition: data.weather.weather?.[0]?.main || data.weather.weather?.[0]?.description || "Unknown",
+        }
+      : undefined;
 
     return { recommendations, weather };
   }
 
-  // Health check
-  async healthCheck(): Promise<{ status: string; time: string }> {
-    return this.request('/api/health');
+  async healthCheck() {
+    return this.request<{ status: string; time: string }>("/api/health");
   }
 }
 
-// Export singleton instance
 export const apiClient = new ApiClient();
 export type { FrontendWardrobeItem };

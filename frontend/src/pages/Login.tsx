@@ -27,7 +27,7 @@ const Login = () => {
 
   const from = location.state?.from?.pathname || "/wardrobe";
 
-  // If user is already logged in, redirect to wardrobe
+  // Redirect if already logged in
   useEffect(() => {
     if (user) {
       navigate(from, { replace: true });
@@ -44,15 +44,29 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      await login(email.trim(), password);
+      // Attempt login
+ 
+      const result = await login(email.trim(), password);
+
+      // ✅ Extra safety: Ensure response is valid
+      if (!result || typeof result !== "object") {
+        throw new Error("Unexpected server response. Please try again.");
+      }
+
       navigate(from, { replace: true });
     } catch (err) {
       console.error("Login error:", err);
-      setError(
-        err instanceof Error
-          ? err.message || "Invalid email or password"
-          : "Login failed. Please try again."
-      );
+
+      let message = "Login failed. Please try again.";
+
+      if (err instanceof SyntaxError) {
+        // JSON parsing failed
+        message = "Server sent invalid response. Please contact support.";
+      } else if (err instanceof Error) {
+        message = err.message || "Invalid email or password";
+      }
+
+      setError(message);
     } finally {
       setIsLoading(false);
     }

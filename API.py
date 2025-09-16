@@ -1,8 +1,11 @@
-# app.py
+# API.py
 import os
 import json
 import time
 import uuid
+import hmac
+import hashlib
+import base64
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from functools import wraps
@@ -12,7 +15,6 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
-import jwt
 
 from fashion_analyzer import FashionAnalyzer
 from weather_client import WeatherClient, infer_season
@@ -45,6 +47,83 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 os.makedirs(WARDROBE_FOLDER, exist_ok=True)
 
+# --- Minimal self-contained JWT implementation (HS256)
+class ExpiredSignatureError(Exception):
+    pass
+
+class InvalidTokenError(Exception):
+    pass
+
+def _b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
+
+def _b64url_decode(data: str) -> bytes:
+    # add required padding
+    padding = '=' * (-len(data) % 4)
+    return base64.urlsafe_b64decode(data + padding)
+
+def encode_jwt(payload: Dict[str, Any], secret: str, algorithm: str = "HS256") -> str:
+    """
+    Simple HS256 JWT encoder. Returns token string.
+    """
+    if algorithm != "HS256":
+        raise ValueError("Only HS256 is supported in this implementation.")
+    header = {"alg": "HS256", "typ": "JWT"}
+    header_b = json.dumps(header, separators=(',', ':')).encode("utf-8")
+    payload_b = json.dumps(payload, separators=(',', ':')).encode("utf-8")
+    header_b64 = _b64url_encode(header_b)
+    payload_b64 = _b64url_encode(payload_b)
+    signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    signature_b64 = _b64url_encode(signature)
+    return f"{header_b64}.{payload_b64}.{signature_b64}"
+
+def decode_jwt(token: str, secret: str, algorithms: List[str] = ["HS256"], verify_exp: bool = True) -> Dict[str, Any]:
+    """
+    Decode and verify HS256 JWT. Returns payload dict or raises ExpiredSignatureError / InvalidTokenError.
+    """
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            raise InvalidTokenError("Token must have exactly 3 parts")
+        header_b64, payload_b64, sig_b64 = parts
+        try:
+            header_json = json.loads(_b64url_decode(header_b64))
+        except Exception:
+            raise InvalidTokenError("Invalid header encoding")
+        alg = header_json.get("alg")
+        if alg not in algorithms:
+            raise InvalidTokenError("Algorithm not allowed")
+        signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
+        expected_sig = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+        try:
+            sig = _b64url_decode(sig_b64)
+        except Exception:
+            raise InvalidTokenError("Invalid signature encoding")
+        if not hmac.compare_digest(expected_sig, sig):
+            raise InvalidTokenError("Signature verification failed")
+        try:
+            payload = json.loads(_b64url_decode(payload_b64))
+        except Exception:
+            raise InvalidTokenError("Invalid payload encoding")
+        if verify_exp and "exp" in payload:
+            now_ts = int(time.time())
+            # payload's exp might be timestamp (int) or float
+            try:
+                exp_ts = int(payload["exp"])
+            except Exception:
+                raise InvalidTokenError("Invalid 'exp' claim")
+            if now_ts > exp_ts:
+                raise ExpiredSignatureError("Token has expired")
+        return payload
+    except ExpiredSignatureError:
+        raise
+    except InvalidTokenError:
+        raise
+    except Exception as e:
+        # Generic failure
+        raise InvalidTokenError(f"Invalid token: {e}")
+
 # --- Models
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -65,11 +144,13 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
     
     def generate_token(self):
+        # create payload with exp as unix timestamp (int)
+        exp_ts = int(time.time() + app.config['JWT_EXPIRATION_DELTA'].total_seconds())
         payload = {
             'user_id': self.id,
-            'exp': datetime.utcnow() + app.config['JWT_EXPIRATION_DELTA']
+            'exp': exp_ts
         }
-        return jwt.encode(payload, app.config['JWT_SECRET'], algorithm='HS256')
+        return encode_jwt(payload, app.config['JWT_SECRET'], algorithm='HS256')
     
     def to_dict(self):
         return {
@@ -110,14 +191,16 @@ def token_required(f):
             return jsonify({'error': 'Token missing'}), 401
         
         try:
-            payload = jwt.decode(token, app.config['JWT_SECRET'], algorithms=['HS256'])
-            current_user_id = payload['user_id']
+            payload = decode_jwt(token, app.config['JWT_SECRET'], algorithms=['HS256'], verify_exp=True)
+            current_user_id = payload.get('user_id')
             user = User.query.get(current_user_id)
             if not user:
                 return jsonify({'error': 'User not found'}), 401
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             return jsonify({'error': 'Token expired'}), 401
-        except jwt.InvalidTokenError:
+        except InvalidTokenError as e:
+            return jsonify({'error': f'Invalid token: {str(e)}'}), 401
+        except Exception as e:
             return jsonify({'error': 'Invalid token'}), 401
         
         return f(user, *args, **kwargs)
@@ -202,7 +285,7 @@ def get_profile(current_user):
 @app.route("/auth/profile", methods=["PUT"])
 @token_required
 def update_profile(current_user):
-    data = request.get_json()
+    data = request.get_json() or {}
     
     if 'name' in data:
         current_user.name = data['name'].strip()
