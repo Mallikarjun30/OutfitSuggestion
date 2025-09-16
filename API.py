@@ -516,10 +516,7 @@ def serve_frontend(path):
         return jsonify({"status": "ok", "time": datetime.utcnow().isoformat(), "mode": "development"})
 
 if __name__ == "__main__":
-    # In development: use 8080, in production: use platform PORT or default to 5000
-    debug_mode = os.getenv('FLASK_ENV') == 'development' or os.getenv('FLASK_DEBUG') == '1'
-    if debug_mode:
-        port = 8080  # Development port
-    else:
-        port = int(os.getenv('PORT', '5000'))  # Production port from platform or default
-    app.run(host="0.0.0.0", port=port, debug=debug_mode)
+    # Always use port 8080 for backend in development to avoid conflict with frontend on port 5000
+    port = 8080
+    debug_mode = True  # Enable debug mode for development
+    app.run(host="127.0.0.1", port=port, debug=debug_mode)
