@@ -40,18 +40,17 @@ class RequestFormatter(logging.Formatter):
             'line': record.lineno
         }
         
-        if hasattr(record, 'user_id'):
-            log_data['user_id'] = record.user_id
-        if hasattr(record, 'method'):
-            log_data['method'] = record.method
-        if hasattr(record, 'path'):
-            log_data['path'] = record.path
+        # Add standard fields from 'extra' if they exist
+        for key in ['user_id', 'method', 'path', 'status_code', 'duration_ms', 'prompt']:
+            if hasattr(record, key):
+                log_data[key] = getattr(record, key)
             
         return json.dumps(log_data)
 
 handler = logging.StreamHandler()
 handler.setFormatter(RequestFormatter())
-logging.basicConfig(level=logging.DEBUG, handlers=[handler])
+# Set default log level to INFO to reduce noise. Change to DEBUG to see full prompts.
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 logger = logging.getLogger(__name__)
 
 # --- App Setup
@@ -83,21 +82,21 @@ os.makedirs(WARDROBE_FOLDER, exist_ok=True)
 # --- Request ID middleware for logging
 @app.before_request
 def before_request():
-    import flask
     request_id = str(uuid.uuid4())[:8]
     flask.g.request_id = request_id
     flask.g.start_time = time.time()
     
-    extra = {
-        'method': request.method,
-        'path': request.path,
-        'user_id': getattr(flask.g, 'current_user_id', None)
-    }
-    logger.info("Request started", extra=extra)
+    # Associate user_id with the request context if available later
+    flask.g.current_user_id = None
 
 @app.after_request
 def after_request(response):
-    import flask
+    # --- REDUCED NOISE: Exclude high-volume, low-information endpoints from logging ---
+    exclude_endpoints = ['serve_wardrobe_image', 'health', 'serve_frontend']
+    if request.endpoint in exclude_endpoints:
+        return response
+    # ----------------------------------------------------------------------------------
+
     duration = time.time() - flask.g.start_time if hasattr(flask.g, 'start_time') else 0
     
     extra = {
@@ -107,7 +106,7 @@ def after_request(response):
         'duration_ms': round(duration * 1000, 2),
         'user_id': getattr(flask.g, 'current_user_id', None)
     }
-    logger.info("Request completed", extra=extra)
+    logger.info(f"{request.method} {request.path} - {response.status_code}", extra=extra)
     return response
 
 # --- Minimal self-contained JWT implementation (HS256)
@@ -259,6 +258,8 @@ def token_required(f):
             user = User.query.get(current_user_id)
             if not user:
                 return jsonify({'error': 'User not found'}), 401
+            # Add user_id to flask.g for logging context
+            flask.g.current_user_id = user.id
         except ExpiredSignatureError:
             return jsonify({'error': 'Token expired'}), 401
         except InvalidTokenError as e:
@@ -439,7 +440,7 @@ def serve_wardrobe_image(current_user, item_id):
     return send_from_directory(WARDROBE_FOLDER, item.filename)
 
 
-# --- Outfit Suggestion Endpoint (unchanged except no parsed_json used)
+# --- Outfit Suggestion Endpoint
 
 @app.route("/outfit", methods=["POST"])
 @token_required
@@ -460,26 +461,13 @@ def upload_outfit_and_suggest(current_user):
         if not gender: missing_fields.append('gender')
         if not skin_tone: missing_fields.append('skin tone')
         
-        logger.warning("User has incomplete profile", extra={
-            'user_id': current_user.id,
-            'missing_fields': missing_fields
-        })
+        logger.warning("User has incomplete profile", extra={'user_id': current_user.id})
         
         return jsonify({
             "error": "Profile incomplete",
             "message": f"Please complete your profile by adding: {', '.join(missing_fields)}. Visit your profile page to update this information.",
             "missing_fields": missing_fields
         }), 400
-    
-    # Store user_id in flask.g for logging
-    flask.g.current_user_id = current_user.id
-    
-    logger.info("Outfit suggestion request", extra={
-        'user_id': current_user.id,
-        'city': city,
-        'gender': gender,
-        'skin_tone': skin_tone
-    })
 
     # --- Handle multiple files ---
     files = request.files.getlist("files")
@@ -535,17 +523,13 @@ def upload_outfit_and_suggest(current_user):
         # --- Get weather data (city OR lat/lon) ---
         weather_json = None
         if city:
-            logger.info(f"Fetching weather for city: {city}")
             weather_json = weather_client.current_by_city(city=city, units=units)
         elif lat and lon:
             try:
-                logger.info(f"Fetching weather for coordinates: {lat}, {lon}")
                 weather_json = weather_client.current_by_coords(lat=float(lat), lon=float(lon), units=units)
             except Exception as e:
-                logger.error(f"Failed to get weather by coordinates: {e}")
+                logger.error(f"Failed to get weather by coordinates: {e}", extra={'user_id': current_user.id})
                 weather_json = None
-        
-        logger.info(f"Weather data obtained: {weather_json is not None}")
 
         weather_summary = "unknown"
         if weather_json:
@@ -557,7 +541,6 @@ def upload_outfit_and_suggest(current_user):
         # --- Wardrobe summary for prompt ---
         wardrobe_items = WardrobeItem.query.filter_by(user_id=current_user.id).order_by(WardrobeItem.created_at.desc()).limit(MAX_PROMPT_WARDROBE).all()
         wardrobe_digest_lines = [f"[{wi.id}] {wi.description}" for wi in wardrobe_items]
-        logger.info(f"Using {len(wardrobe_items)} wardrobe items for suggestions")
 
         # --- Outfit description block ---
         outfit_digest_lines = [
@@ -622,12 +605,20 @@ def upload_outfit_and_suggest(current_user):
             "Return ONLY the JSON object with no additional formatting or text."
         )
 
-
-
         # --- Get AI suggestions ---
-        logger.info(f"Sending prompt to AI analyzer (length: {len(prompt)} chars)")
+        
+        # --- DEV ONLY: Print the full prompt to the console for easy debugging ---
+        if app.debug:
+            print("\n" + "="*50)
+            print(f"PROMPT FOR REQUEST: {flask.g.request_id}")
+            print("="*50)
+            print(prompt)
+            print("="*50 + "\n")
+        # -----------------------------------------------------------------------
+        
+        logger.info(f"Sending prompt to AI analyzer (length: {len(prompt)} chars)", extra={'user_id': current_user.id})
         suggestion_text = analyzer.suggest(prompt)
-        logger.info(f"Received AI response (length: {len(suggestion_text)} chars)")
+        
         try:
             # Handle markdown code blocks and clean the JSON
             clean_text = suggestion_text.strip()
@@ -641,7 +632,7 @@ def upload_outfit_and_suggest(current_user):
             
             suggestion_json = json.loads(clean_text)
         except Exception as e:
-            logger.error(f"JSON parsing failed: {e}")
+            logger.error(f"JSON parsing failed: {e}", extra={'user_id': current_user.id})
             suggestion_json = {"recommendations": [], "notes": suggestion_text}
 
         out_recs = []
@@ -655,8 +646,6 @@ def upload_outfit_and_suggest(current_user):
                 resolved["item"] = wardrobe_item_to_dict(item) if item else None
             out_recs.append(resolved)
         
-        logger.info(f"Generated {len(out_recs)} outfit recommendations")
-
         return jsonify({
             "outfit_descriptions": outfit_descriptions,
             "season": season,
@@ -673,7 +662,7 @@ def upload_outfit_and_suggest(current_user):
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
             except Exception as e:
-                logger.warning(f"Could not cleanup temp file {temp_file}: {e}")
+                logger.warning(f"Could not cleanup temp file {temp_file}: {e}", extra={'user_id': current_user.id})
 
 
 # --- Health Check
@@ -700,7 +689,7 @@ def serve_frontend(path):
         return jsonify({"status": "ok", "time": datetime.utcnow().isoformat(), "mode": "development"})
 
 if __name__ == "__main__":
-    # Always use port 8080 for backend in development to avoid conflict with frontend on port 5000
+    # Always use port 8080 for backend in development to avoid conflict with frontend
     port = 8080
     debug_mode = True  # Enable debug mode for development
     app.run(host="127.0.0.1", port=port, debug=debug_mode)
