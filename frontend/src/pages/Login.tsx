@@ -1,35 +1,58 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
-  const { login } = useAuth();
+
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const { login, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  const from = location.state?.from?.pathname || '/wardrobe';
+
+  const from = location.state?.from?.pathname || "/wardrobe";
+
+  // If user is already logged in, redirect to wardrobe
+  useEffect(() => {
+    if (user) {
+      navigate(from, { replace: true });
+    }
+  }, [user, navigate, from]);
+
+  useEffect(() => {
+    emailInputRef.current?.focus();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       navigate(from, { replace: true });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Login failed');
+    } catch (err) {
+      console.error("Login error:", err);
+      setError(
+        err instanceof Error
+          ? err.message || "Invalid email or password"
+          : "Login failed. Please try again."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -37,7 +60,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-soft px-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
           <CardDescription>
@@ -51,19 +74,21 @@ const Login = () => {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
+                ref={emailInputRef}
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="Enter your email"
+                disabled={isLoading}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
@@ -73,11 +98,12 @@ const Login = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="Enter your password"
+                disabled={isLoading}
               />
             </div>
-            
-            <Button 
-              type="submit" 
+
+            <Button
+              type="submit"
               className="w-full fashion-button-primary"
               disabled={isLoading}
             >
@@ -87,15 +113,15 @@ const Login = () => {
                   Signing in...
                 </>
               ) : (
-                'Sign In'
+                "Sign In"
               )}
             </Button>
-            
+
             <div className="text-center">
               <span className="text-sm text-muted-foreground">
-                Don't have an account?{' '}
-                <Link 
-                  to="/register" 
+                Don't have an account?{" "}
+                <Link
+                  to="/register"
                   state={{ from: location.state?.from }}
                   className="text-primary hover:underline"
                 >

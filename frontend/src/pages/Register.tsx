@@ -1,71 +1,100 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
 const Register = () => {
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    name: '',
-    skinTone: '',
-    gender: ''
+    email: "",
+    password: "",
+    confirmPassword: "",
+    name: "",
+    skinTone: "",
+    gender: "",
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
-  const { register } = useAuth();
+
+  const { register, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  const from = location.state?.from?.pathname || '/wardrobe';
+  const from = location.state?.from?.pathname || "/wardrobe";
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) navigate(from, { replace: true });
+  }, [user, navigate, from]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+    setError("");
+
+    if (!formData.name.trim()) {
+      setError("Name is required");
       return;
     }
-    
+    if (!formData.email.trim()) {
+      setError("Email is required");
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
     if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      setError("Password must be at least 6 characters long");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      await register(
-        formData.email, 
-        formData.password, 
-        formData.name,
-        formData.skinTone || undefined,
-        formData.gender || undefined
-      );
+      await register({
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        skinTone: formData.skinTone || undefined,
+        gender: formData.gender || undefined,
+      });
+
       navigate(from, { replace: true });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Registration failed');
+    } catch (err) {
+      console.error("Registration error:", err);
+      setError(
+        err instanceof Error
+          ? err.message || "Registration failed"
+          : "Something went wrong. Please try again."
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-soft px-4 py-8">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
           <CardDescription>
@@ -79,57 +108,67 @@ const Register = () => {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            
+
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
               <Input
                 id="name"
                 value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
+                onChange={(e) => handleInputChange("name", e.target.value)}
                 required
                 placeholder="Enter your full name"
+                disabled={isLoading}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
+                onChange={(e) => handleInputChange("email", e.target.value)}
                 required
                 placeholder="Enter your email"
+                disabled={isLoading}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
                 value={formData.password}
-                onChange={(e) => handleInputChange('password', e.target.value)}
+                onChange={(e) => handleInputChange("password", e.target.value)}
                 required
                 placeholder="Create a password (min 6 characters)"
+                disabled={isLoading}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 value={formData.confirmPassword}
-                onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange("confirmPassword", e.target.value)
+                }
                 required
                 placeholder="Confirm your password"
+                disabled={isLoading}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="gender">Gender (Optional)</Label>
-              <Select value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)}>
+              <Select
+                value={formData.gender}
+                onValueChange={(value) => handleInputChange("gender", value)}
+                disabled={isLoading}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select your gender" />
                 </SelectTrigger>
@@ -137,14 +176,20 @@ const Register = () => {
                   <SelectItem value="male">Male</SelectItem>
                   <SelectItem value="female">Female</SelectItem>
                   <SelectItem value="non-binary">Non-binary</SelectItem>
-                  <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem>
+                  <SelectItem value="prefer-not-to-say">
+                    Prefer not to say
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="skinTone">Skin Tone (Optional)</Label>
-              <Select value={formData.skinTone} onValueChange={(value) => handleInputChange('skinTone', value)}>
+              <Select
+                value={formData.skinTone}
+                onValueChange={(value) => handleInputChange("skinTone", value)}
+                disabled={isLoading}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select your skin tone" />
                 </SelectTrigger>
@@ -157,9 +202,9 @@ const Register = () => {
                 </SelectContent>
               </Select>
             </div>
-            
-            <Button 
-              type="submit" 
+
+            <Button
+              type="submit"
               className="w-full fashion-button-primary"
               disabled={isLoading}
             >
@@ -169,15 +214,15 @@ const Register = () => {
                   Creating account...
                 </>
               ) : (
-                'Create Account'
+                "Create Account"
               )}
             </Button>
-            
+
             <div className="text-center">
               <span className="text-sm text-muted-foreground">
-                Already have an account?{' '}
-                <Link 
-                  to="/login" 
+                Already have an account?{" "}
+                <Link
+                  to="/login"
                   state={{ from: location.state?.from }}
                   className="text-primary hover:underline"
                 >
