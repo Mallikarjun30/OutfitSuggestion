@@ -26,11 +26,16 @@ from flask_cors import CORS
 # --- Structured Logging Setup
 class RequestFormatter(logging.Formatter):
     def format(self, record):
-        if hasattr(flask.g, 'request_id'):
-            record.request_id = flask.g.request_id
-        else:
+        try:
+            # Safely check if we're inside a Flask request context
+            if flask.has_request_context() and hasattr(flask.g, 'request_id'):
+                record.request_id = flask.g.request_id
+            else:
+                record.request_id = 'unknown'
+        except RuntimeError:
+            # No request context at all
             record.request_id = 'unknown'
-        
+
         log_data = {
             'timestamp': self.formatTime(record),
             'level': record.levelname,
@@ -39,13 +44,13 @@ class RequestFormatter(logging.Formatter):
             'module': record.module,
             'line': record.lineno
         }
-        
-        # Add standard fields from 'extra' if they exist
+
         for key in ['user_id', 'method', 'path', 'status_code', 'duration_ms', 'prompt']:
             if hasattr(record, key):
                 log_data[key] = getattr(record, key)
-            
+
         return json.dumps(log_data)
+
 
 handler = logging.StreamHandler()
 handler.setFormatter(RequestFormatter())
